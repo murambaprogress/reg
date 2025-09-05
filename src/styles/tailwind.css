@@ -1,0 +1,246 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme - Regimark Red & Black color palette */
+    --color-primary: #DC2626; /* Regimark Red */
+    --color-primary-foreground: #FFFFFF;
+    
+    --color-secondary: #1F2937; /* Dark gray */
+    --color-secondary-foreground: #FFFFFF;
+    
+    --color-accent: #DC2626; /* Regimark Red accent */
+    --color-accent-foreground: #FFFFFF;
+    
+    --color-background: #F9FAFB;
+    --color-surface: #FFFFFF;
+    
+    --color-text-primary: #111827;
+    --color-text-secondary: #6B7280;
+    
+    --color-success: #10B981;
+    --color-success-foreground: #FFFFFF;
+    
+    --color-warning: #F59E0B;
+    --color-warning-foreground: #FFFFFF;
+    
+    --color-error: #EF4444;
+    --color-error-foreground: #FFFFFF;
+    
+    --color-border: #E5E7EB;
+    --color-border-dark: rgba(75, 85, 99, 0.3);
+    
+    /* Modern effects */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --shadow-glow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+    --shadow-glow-lg: 0 0 0 5px rgba(220, 38, 38, 0.15);
+    
+    --timing-fast: 150ms;
+    --timing-normal: 200ms;
+    --timing-slow: 300ms;
+    --timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .dark {
+    /* Dark theme - Regimark Red & Black color palette */
+    --color-primary: #DC2626; /* Regimark Red stays consistent */
+    --color-primary-foreground: #FFFFFF;
+    
+    --color-secondary: #374151;
+    --color-secondary-foreground: #FFFFFF;
+    
+    --color-accent: #EF4444; /* Slightly lighter red for dark theme */
+    --color-accent-foreground: #FFFFFF;
+    
+    --color-background: #111827; /* Dark background */
+    --color-surface: #1F2937; /* Dark surface */
+    
+    --color-text-primary: #F9FAFB;
+    --color-text-secondary: #D1D5DB;
+    
+    --color-success: #10B981;
+    --color-success-foreground: #FFFFFF;
+    
+    --color-warning: #F59E0B;
+    --color-warning-foreground: #FFFFFF;
+    
+    --color-error: #EF4444;
+    --color-error-foreground: #FFFFFF;
+    
+    --color-border: #374151;
+    --color-border-dark: rgba(156, 163, 175, 0.3);
+    
+    /* Dark theme shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+    --shadow-glow-lg: 0 0 0 5px rgba(220, 38, 38, 0.25);
+  }
+  
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-text-primary font-body;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color var(--timing-normal) var(--timing-function),
+                color var(--timing-normal) var(--timing-function);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+  
+  .font-data {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .nav-transition {
+    transition: all var(--timing-normal) var(--timing-function);
+  }
+  
+  .micro-interaction {
+    transition: all var(--timing-fast) ease-out;
+  }
+  
+  .state-transition {
+    transition: all var(--timing-slow) var(--timing-function);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .shadow-modal {
+    box-shadow: var(--shadow-md);
+  }
+  
+  .shadow-elegant {
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .shadow-dramatic {
+    box-shadow: var(--shadow-xl);
+  }
+  
+  .shadow-epic {
+    box-shadow: var(--shadow-2xl);
+  }
+  
+  .glow-selection {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .glow-selection-lg {
+    box-shadow: var(--shadow-glow-lg);
+  }
+  
+  .modern-card {
+    @apply bg-surface border border-border rounded-xl shadow-elegant;
+    transition: all var(--timing-normal) var(--timing-function);
+  }
+  
+  .modern-card:hover {
+    @apply shadow-dramatic;
+    transform: translateY(-2px);
+  }
+  
+  .modern-button {
+    @apply relative overflow-hidden;
+    transition: all var(--timing-normal) var(--timing-function);
+  }
+  
+  .modern-button:hover {
+    @apply shadow-lg;
+    transform: translateY(-1px);
+  }
+  
+  .modern-button:active {
+    transform: translateY(0);
+  }
+  
+  .modern-button:focus {
+    @apply glow-selection;
+  }
+  
+  .modern-input {
+    @apply border-border bg-surface;
+    transition: all var(--timing-normal) var(--timing-function);
+  }
+  
+  .modern-input:focus {
+    @apply border-primary glow-selection;
+  }
+  
+  .pulse-animation {
+    animation: pulse 2s ease-in-out infinite;
+  }
+  
+  .floating-animation {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  
+  .gradient-text {
+    background: linear-gradient(135deg, #DC2626, #EF4444);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .gradient-border {
+    background: linear-gradient(135deg, #DC2626, #EF4444);
+    border-radius: 0.75rem;
+    padding: 2px;
+  }
+  
+  .gradient-border > * {
+    background: var(--color-surface);
+    border-radius: 0.625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-transition,
+  .micro-interaction,
+  .state-transition,
+  .pulse-animation,
+  .floating-animation,
+  .modern-card,
+  .modern-button,
+  .modern-input {
+    animation: none;
+    transition: none;
+  }
+}
