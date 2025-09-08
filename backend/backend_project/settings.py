@@ -36,16 +36,22 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'api.middleware.CSRFExemptMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Exempt API endpoints from CSRF validation
+CSRF_EXEMPT_URLS = [
+    r'^/api/',
+]
+
 ROOT_URLCONF = 'backend_project.urls'
 
 # Frontend template directory
-FRONTEND_DIR = os.path.join(BASE_DIR.parent, 'dist')
+FRONTEND_DIR = os.path.join(BASE_DIR, 'static', 'frontend')
 
 TEMPLATES = [
     {
@@ -65,14 +71,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend_project.wsgi.application'
 
-# Database (MySQL via XAMPP)
+# Database (MySQL via PythonAnywhere)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.environ.get('DB_NAME', 'regimark_motors'),
-        'USER': os.environ.get('DB_USER', 'root'),
-        'PASSWORD': os.environ.get('DB_PASS', ''),
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        'NAME': os.environ.get('DB_NAME', 'Progress$regimark_motors'),
+        'USER': os.environ.get('DB_USER', 'Progress'),
+        'PASSWORD': os.environ.get('DB_PASS', 'prog003done'),
+        'HOST': os.environ.get('DB_HOST', 'Progress.mysql.pythonanywhere-services.com'),
         'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
@@ -91,11 +97,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Frontend static files (built React app)
-FRONTEND_DIR = os.path.join(BASE_DIR.parent, 'dist')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
-    FRONTEND_DIR,
-] if os.path.exists(FRONTEND_DIR) else [os.path.join(BASE_DIR, 'static')]
+]
 
 # Media files
 MEDIA_URL = '/media/'
@@ -103,24 +107,26 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3003',
-    'http://localhost:3004',
-    'http://localhost:3005',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-    'http://127.0.0.1:3002',
-    'http://127.0.0.1:3003',
-    'http://127.0.0.1:3004',
-    'http://127.0.0.1:3005',
-    'https://progress.pythonanywhere.com',
-    'http://progress.pythonanywhere.com',
-]
-CORS_ALLOW_CREDENTIALS = True
+# CORS - Allow all origins in development for easier testing
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
+    CORS_ALLOW_ALL_HEADERS = True
+    CORS_ALLOW_ALL_METHODS = True
+    # Disable CSRF for development
+    CSRF_TRUSTED_ORIGINS = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        'https://progress.pythonanywhere.com',
+        'http://progress.pythonanywhere.com',
+    ]
+    CORS_ALLOW_CREDENTIALS = True
+
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 # REST Framework and JWT settings

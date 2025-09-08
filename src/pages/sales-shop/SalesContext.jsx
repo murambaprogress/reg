@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { useInventory } from '../../pages/inventory-management/InventoryContext';
 import { useUser } from '../../components/UserContext';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
 const getAuthToken = () => { try { return localStorage.getItem('token'); } catch (e) { return null; } };
 

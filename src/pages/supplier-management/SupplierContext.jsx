@@ -5,7 +5,7 @@ const getAuthToken = () => {
   try { return localStorage.getItem('token'); } catch (e) { return null; }
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
 const SupplierContext = createContext();
 

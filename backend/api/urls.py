@@ -19,4 +19,8 @@ urlpatterns += [
     path('admin/technicians/<int:technician_id>', views.delete_technician, name='delete_technician'),
     path('admin/technicians/<int:technician_id>/toggle-active', views.toggle_technician_active, name='toggle_technician_active'),
     path('admin/recent-activity', views.admin_recent_activity, name='admin_recent_activity'),
+    path('admin/system-health', views.admin_system_health, name='admin_system_health'),
+    # Dashboard endpoints
+    path('dashboard/kpi', views.dashboard_kpi, name='dashboard_kpi'),
+    path('dashboard/monthly-stats', views.dashboard_monthly_stats, name='dashboard_monthly_stats'),
 ]

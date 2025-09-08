@@ -1,53 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 
 const JobStatusBoard = () => {
-  const jobs = [
-    {
-      id: "JOB-001",
-      vehicle: "Toyota Camry 2020",
-      customer: "John Smith",
-      technician: "Mike Johnson",
-      status: "in-progress",
-      priority: "high",
-      estimatedTime: "2 hours",
-      progress: 65,
-      services: ["Oil Change", "Brake Inspection"]
-    },
-    {
-      id: "JOB-002", 
-      vehicle: "Honda Civic 2019",
-      customer: "Sarah Wilson",
-      technician: "David Brown",
-      status: "pending",
-      priority: "medium",
-      estimatedTime: "1.5 hours",
-      progress: 0,
-      services: ["Tire Rotation", "Battery Check"]
-    },
-    {
-      id: "JOB-003",
-      vehicle: "Ford F-150 2021",
-      customer: "Robert Davis",
-      technician: "Alex Martinez",
-      status: "completed",
-      priority: "low",
-      estimatedTime: "3 hours",
-      progress: 100,
-      services: ["Engine Diagnostic", "Transmission Service"]
-    },
-    {
-      id: "JOB-004",
-      vehicle: "BMW X5 2022",
-      customer: "Emily Johnson",
-      technician: "Chris Anderson",
-      status: "in-progress",
-      priority: "high",
-      estimatedTime: "4 hours",
-      progress: 30,
-      services: ["AC Repair", "Brake Pad Replacement"]
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const fetchJobs = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/dashboard/active-jobs`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data);
+      }
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -88,8 +72,20 @@ const JobStatusBoard = () => {
         </div>
       </div>
       <div className="p-6">
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {jobs.map((job) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Icon name="Loader" size={32} className="animate-spin text-accent" />
+            <span className="ml-2 text-text-secondary">Loading jobs...</span>
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="text-center py-8">
+            <Icon name="Briefcase" size={48} className="mx-auto mb-4 opacity-50 text-text-secondary" />
+            <p className="text-lg font-body-medium text-text-secondary">No active jobs</p>
+            <p className="text-sm text-text-secondary">Jobs will appear here when they are created</p>
+          </div>
+        ) : (
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {jobs.map((job) => (
             <div key={job.id} className="border border-border rounded-lg p-4 micro-interaction hover:shadow-md">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center space-x-3">
@@ -153,7 +149,8 @@ const JobStatusBoard = () => {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

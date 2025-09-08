@@ -22,9 +22,9 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Serve frontend static files and handle React routing
-frontend_dir = os.path.join(settings.BASE_DIR.parent, 'dist')
+frontend_dir = os.path.join(settings.BASE_DIR, 'static', 'frontend')
 if os.path.exists(frontend_dir):
-    # Serve static assets from dist folder
+    # Serve static assets from frontend folder
     urlpatterns += [
         re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': os.path.join(frontend_dir, 'assets')}),
     ]

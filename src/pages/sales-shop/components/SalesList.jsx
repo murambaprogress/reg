@@ -12,7 +12,7 @@ const SalesList = ({ onEdit = () => {}, onDelete = () => {} }) => {
       try {
         // Call the API to delete the sale
         const token = localStorage.getItem('token');
-        const response = await fetch(`${import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api'}/sales/${saleId}/`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api'}/sales/${saleId}/`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,

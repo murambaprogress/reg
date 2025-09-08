@@ -5,22 +5,27 @@ import Button from '../../../components/ui/Button';
 const SystemOverview = ({ stats, onRefresh }) => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [systemHealth, setSystemHealth] = useState({
-    status: 'healthy',
-    uptime: '99.9%',
+    status: 'loading',
+    uptime: '0%',
     lastBackup: new Date().toISOString(),
-    activeConnections: 12
+    activeConnections: 0,
+    jobCompletionRate: 0,
+    technicianUtilization: 0,
+    customerSatisfaction: 0,
+    partsAvailability: 0
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   useEffect(() => {
     fetchRecentActivity();
+    fetchSystemHealth();
   }, []);
 
   const fetchRecentActivity = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/admin/recent-activity`, {
+      const response = await fetch(`${API_BASE}/auth/admin/recent-activity`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -30,44 +35,32 @@ const SystemOverview = ({ stats, onRefresh }) => {
       if (response.ok) {
         const data = await response.json();
         setRecentActivity(data);
+      } else {
+        console.error('Failed to fetch recent activity');
+        setRecentActivity([]);
       }
     } catch (error) {
       console.error('Error fetching recent activity:', error);
-      // Fallback to mock data if API fails
-      setRecentActivity([
-        {
-          id: 1,
-          type: 'job_completed',
-          message: 'Job #123 completed by John Doe',
-          timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-          icon: 'CheckCircle',
-          color: 'text-success'
-        },
-        {
-          id: 2,
-          type: 'technician_login',
-          message: 'Mike Smith logged in',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-          icon: 'User',
-          color: 'text-accent'
-        },
-        {
-          id: 3,
-          type: 'job_assigned',
-          message: 'Job #124 assigned to Sarah Johnson',
-          timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-          icon: 'UserCheck',
-          color: 'text-primary'
-        },
-        {
-          id: 4,
-          type: 'parts_requested',
-          message: 'Parts requested for Job #122',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-          icon: 'Package',
-          color: 'text-warning'
+      setRecentActivity([]);
+    }
+  };
+
+  const fetchSystemHealth = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/auth/admin/system-health`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      ]);
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSystemHealth(data);
+      }
+    } catch (error) {
+      console.error('Error fetching system health:', error);
     }
   };
 
@@ -117,7 +110,11 @@ const SystemOverview = ({ stats, onRefresh }) => {
           <p className="text-sm text-text-secondary">Monitor system health and recent activity</p>
         </div>
         <Button
-          onClick={onRefresh}
+          onClick={() => {
+            onRefresh();
+            fetchSystemHealth();
+            fetchRecentActivity();
+          }}
           variant="outline"
           className="flex items-center space-x-2"
         >
@@ -173,40 +170,40 @@ const SystemOverview = ({ stats, onRefresh }) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-text-secondary">Job Completion Rate</span>
-                <span className="text-sm font-body-medium text-text-primary">94%</span>
+                <span className="text-sm font-body-medium text-text-primary">{systemHealth.jobCompletionRate}%</span>
               </div>
               <div className="w-full bg-background rounded-full h-2">
-                <div className="bg-success h-2 rounded-full" style={{ width: '94%' }}></div>
+                <div className="bg-success h-2 rounded-full" style={{ width: `${systemHealth.jobCompletionRate}%` }}></div>
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-text-secondary">Technician Utilization</span>
-                <span className="text-sm font-body-medium text-text-primary">87%</span>
+                <span className="text-sm font-body-medium text-text-primary">{systemHealth.technicianUtilization}%</span>
               </div>
               <div className="w-full bg-background rounded-full h-2">
-                <div className="bg-accent h-2 rounded-full" style={{ width: '87%' }}></div>
+                <div className="bg-accent h-2 rounded-full" style={{ width: `${systemHealth.technicianUtilization}%` }}></div>
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-text-secondary">Customer Satisfaction</span>
-                <span className="text-sm font-body-medium text-text-primary">96%</span>
+                <span className="text-sm font-body-medium text-text-primary">{systemHealth.customerSatisfaction}%</span>
               </div>
               <div className="w-full bg-background rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full" style={{ width: '96%' }}></div>
+                <div className="bg-primary h-2 rounded-full" style={{ width: `${systemHealth.customerSatisfaction}%` }}></div>
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-text-secondary">Parts Availability</span>
-                <span className="text-sm font-body-medium text-text-primary">78%</span>
+                <span className="text-sm font-body-medium text-text-primary">{systemHealth.partsAvailability}%</span>
               </div>
               <div className="w-full bg-background rounded-full h-2">
-                <div className="bg-warning h-2 rounded-full" style={{ width: '78%' }}></div>
+                <div className="bg-warning h-2 rounded-full" style={{ width: `${systemHealth.partsAvailability}%` }}></div>
               </div>
             </div>
           </div>

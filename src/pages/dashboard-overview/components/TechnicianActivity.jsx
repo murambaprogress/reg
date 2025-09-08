@@ -1,58 +1,38 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 
 const TechnicianActivity = () => {
-  const technicians = [
-    {
-      id: 1,
-      name: "Mike Johnson",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      status: "active",
-      currentJob: "JOB-001",
-      vehicle: "Toyota Camry",
-      progress: 65,
-      timeSpent: "2h 15m",
-      efficiency: 92,
-      completedToday: 3
-    },
-    {
-      id: 2,
-      name: "David Brown",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-      status: "break",
-      currentJob: null,
-      vehicle: null,
-      progress: 0,
-      timeSpent: "0h 0m",
-      efficiency: 88,
-      completedToday: 2
-    },
-    {
-      id: 3,
-      name: "Alex Martinez",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
-      status: "active",
-      currentJob: "JOB-003",
-      vehicle: "Ford F-150",
-      progress: 100,
-      timeSpent: "3h 45m",
-      efficiency: 95,
-      completedToday: 4
-    },
-    {
-      id: 4,
-      name: "Chris Anderson",
-      avatar: "https://images.unsplash.com/photo-1519244703995-f4e0f30006d5?w=150&h=150&fit=crop&crop=face",
-      status: "active",
-      currentJob: "JOB-004",
-      vehicle: "BMW X5",
-      progress: 30,
-      timeSpent: "1h 20m",
-      efficiency: 90,
-      completedToday: 1
+  const [technicians, setTechnicians] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+
+  useEffect(() => {
+    fetchTechnicians();
+  }, []);
+
+  const fetchTechnicians = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/dashboard/technician-activity`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setTechnicians(data);
+      }
+    } catch (error) {
+      console.error('Error fetching technician activity:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -90,8 +70,20 @@ const TechnicianActivity = () => {
         </div>
       </div>
       <div className="p-6">
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {technicians.map((tech) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Icon name="Loader" size={32} className="animate-spin text-accent" />
+            <span className="ml-2 text-text-secondary">Loading technicians...</span>
+          </div>
+        ) : technicians.length === 0 ? (
+          <div className="text-center py-8">
+            <Icon name="Users" size={48} className="mx-auto mb-4 opacity-50 text-text-secondary" />
+            <p className="text-lg font-body-medium text-text-secondary">No technicians available</p>
+            <p className="text-sm text-text-secondary">Technician activity will appear here</p>
+          </div>
+        ) : (
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {technicians.map((tech) => (
             <div key={tech.id} className="border border-border rounded-lg p-4 micro-interaction hover:shadow-md">
               <div className="flex items-start space-x-4">
                 <div className="relative">
@@ -170,7 +162,8 @@ const TechnicianActivity = () => {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -39,10 +39,10 @@ const AdminSupervisorView = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+      const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
       
       // Fetch technician stats
-      const techResponse = await fetch(`${API_BASE}/admin/technicians`, {
+      const techResponse = await fetch(`${API_BASE}/auth/admin/technicians`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -65,9 +65,9 @@ const AdminSupervisorView = () => {
           totalTechnicians: technicians.length,
           activeTechnicians: technicians.filter(t => t.is_active).length,
           totalJobs: jobs.length,
-          assignedJobs: jobs.filter(j => j.assigned_technician).length,
-          unassignedJobs: jobs.filter(j => !j.assigned_technician).length,
-          completedJobs: jobs.filter(j => j.status === 'Completed').length
+          assignedJobs: jobs.filter(j => j.technician || j.assigned_technician).length,
+          unassignedJobs: jobs.filter(j => !j.technician && !j.assigned_technician).length,
+          completedJobs: jobs.filter(j => j.status === 'completed' || j.status === 'Completed').length
         });
       }
     } catch (error) {

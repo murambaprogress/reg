@@ -9,6 +9,16 @@ import AlertsPanel from './components/AlertsPanel';
 
 const DashboardOverview = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [kpiData, setKpiData] = useState([]);
+  const [monthlyStats, setMonthlyStats] = useState({
+    totalJobs: 0,
+    monthlyRevenue: 0,
+    avgJobDuration: '0h',
+    onTimeCompletion: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -18,56 +28,46 @@ const DashboardOverview = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const kpiData = [
-    {
-      title: 'Jobs In Progress',
-      value: '12',
-      change: '+8%',
-      changeType: 'increase',
-      icon: 'Clock',
-      color: 'accent'
-    },
-    {
-      title: 'Completed Today',
-      value: '28',
-      change: '+15%',
-      changeType: 'increase',
-      icon: 'CheckCircle',
-      color: 'success'
-    },
-    {
-      title: 'Pending Jobs',
-      value: '7',
-      change: '-12%',
-      changeType: 'decrease',
-      icon: 'AlertCircle',
-      color: 'warning'
-    },
-    {
-      title: 'Daily Revenue',
-      value: '$4,250',
-      change: '+22%',
-      changeType: 'increase',
-      icon: 'DollarSign',
-      color: 'primary'
-    },
-    {
-      title: 'Active Technicians',
-      value: '8',
-      change: '0%',
-      changeType: 'increase',
-      icon: 'Users',
-      color: 'accent'
-    },
-    {
-      title: 'Customer Satisfaction',
-      value: '4.8',
-      change: '+0.2',
-      changeType: 'increase',
-      icon: 'Star',
-      color: 'success'
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Fetch KPI data
+      const kpiResponse = await fetch(`${API_BASE}/auth/dashboard/kpi`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (kpiResponse.ok) {
+        const kpiResult = await kpiResponse.json();
+        setKpiData(kpiResult);
+      }
+
+      // Fetch monthly stats
+      const statsResponse = await fetch(`${API_BASE}/auth/dashboard/monthly-stats`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (statsResponse.ok) {
+        const statsResult = await statsResponse.json();
+        setMonthlyStats(statsResult);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const formatTime = (date) => {
     return date.toLocaleTimeString('en-US', {
@@ -160,19 +160,27 @@ const DashboardOverview = () => {
             <div className="bg-surface rounded-lg shadow-card border border-border p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="text-center">
-                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">156</div>
+                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">
+                    {loading ? '...' : monthlyStats.totalJobs}
+                  </div>
                   <div className="text-sm text-text-secondary">Total Jobs This Month</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">$28,450</div>
+                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">
+                    {loading ? '...' : `$${monthlyStats.monthlyRevenue?.toLocaleString() || '0'}`}
+                  </div>
                   <div className="text-sm text-text-secondary">Monthly Revenue</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">2.4h</div>
+                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">
+                    {loading ? '...' : monthlyStats.avgJobDuration}
+                  </div>
                   <div className="text-sm text-text-secondary">Avg. Job Duration</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">94%</div>
+                  <div className="text-2xl font-heading-semibold text-text-primary mb-1">
+                    {loading ? '...' : `${monthlyStats.onTimeCompletion}%`}
+                  </div>
                   <div className="text-sm text-text-secondary">On-Time Completion</div>
                 </div>
               </div>

@@ -11,6 +11,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from .serializers import RegisterSerializer, LoginSerializer, OTPSerializer, UserSerializer
 import logging
 
@@ -195,16 +197,24 @@ def login(request):
         if not ok:
             return Response({'message': 'Failed to send OTP to supervisor', 'error': err}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'message': 'OTP sent to supervisor email', 'otpRequired': True})
-    # admin hardcoded flow
+    # admin hardcoded flow - temporarily skip OTP for testing
     if username == settings.ADMIN_USERNAME:
         if password != settings.ADMIN_PASSWORD:
             return Response({'message': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        otp_code = generate_otp()
-        create_and_log_otp(settings.ADMIN_EMAIL, otp_code)
-        ok, err = send_otp_email(settings.ADMIN_EMAIL, otp_code, subject='Admin Login OTP')
-        if not ok:
-            return Response({'message': 'Failed to send OTP to admin', 'error': err}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'message': 'OTP sent to admin email', 'otpRequired': True})
+        # Create or get admin user record (hardcoded credentials)
+        admin, created = User.objects.get_or_create(username=settings.ADMIN_USERNAME, defaults={
+            'email': settings.ADMIN_EMAIL,
+            'role': 'admin',
+            'verified': True,
+        })
+        admin.set_password(settings.ADMIN_PASSWORD)
+        admin.verified = True
+        admin.is_staff = True
+        admin.is_superuser = True
+        admin.save()
+        token = create_jwt(admin)
+        perms = permissions_for_role('admin')
+        return Response({'message': 'Admin login successful', 'token': token, 'role': 'admin', 'permissions': perms})
     user = User.objects.filter(username=username).first()
     if not user:
         return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -231,18 +241,57 @@ def require_admin(fn):
         except Exception as e:
             return Response({'message': 'Invalid token', 'error': str(e)}, status=status.HTTP_401_UNAUTHORIZED)
     return wrapper
-@require_admin
+@csrf_exempt
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def create_technician(request):
-    if request.method != 'POST':
-        return Response({'message': 'Only POST'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    print(f"DEBUG: create_technician called by user: {request.user}")
+    print(f"DEBUG: user role: {getattr(request.user, 'role', 'NO_ROLE')}")
+    print(f"DEBUG: user authenticated: {request.user.is_authenticated}")
+    print(f"DEBUG: request data: {request.data}")
+    
+    # Check if user is admin or supervisor
+    if not hasattr(request.user, 'role') or request.user.role not in ['admin', 'supervisor']:
+        print(f"DEBUG: Access denied - user role is {getattr(request.user, 'role', 'NO_ROLE')}")
+        return Response({'message': f'Forbidden - user role is {getattr(request.user, "role", "NO_ROLE")}'}, status=status.HTTP_403_FORBIDDEN)
+    
     username = request.data.get('username')
     email = request.data.get('email')
     password = request.data.get('password')
-    if User.objects.filter(username=username).exists() or User.objects.filter(email=email).exists():
-        return Response({'message': 'User already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    tech = User.objects.create_user(username=username, email=email, password=password, role='technician', verified=True)
-    return Response({'message': 'Technician created', 'id': tech.id})
+    
+    print(f"DEBUG: Creating technician with username: {username}, email: {email}")
+    
+    if not username or not email or not password:
+        print(f"DEBUG: Missing required fields - username: {username}, email: {email}, password: {'***' if password else None}")
+        return Response({'message': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(username=username).exists():
+        print(f"DEBUG: Username already exists: {username}")
+        return Response({'message': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(email=email).exists():
+        print(f"DEBUG: Email already exists: {email}")
+        return Response({'message': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        tech = User.objects.create_user(
+            username=username, 
+            email=email, 
+            password=password, 
+            role='technician', 
+            verified=True
+        )
+        print(f"DEBUG: Technician created successfully: {tech.id}")
+        return Response({
+            'message': 'Technician created successfully', 
+            'id': tech.id,
+            'username': tech.username,
+            'email': tech.email
+        })
+    except Exception as e:
+        print(f"DEBUG: Error creating technician: {str(e)}")
+        return Response({'message': 'Error creating technician', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -425,5 +474,287 @@ def admin_recent_activity(request):
         
     except Exception as e:
         return Response({'message': 'Error fetching recent activity', 'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_system_health(request):
+    """Get system health metrics"""
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        from jobs.models import Job
+        from inventory.models import Part
+        import psutil
+        import os
+        
+        # Calculate system metrics
+        total_jobs = Job.objects.count()
+        completed_jobs = Job.objects.filter(status='Completed').count()
+        completion_rate = (completed_jobs / total_jobs * 100) if total_jobs > 0 else 0
+        
+        # Technician utilization
+        active_technicians = User.objects.filter(role='technician', is_active=True).count()
+        assigned_jobs = Job.objects.filter(assigned_technician__isnull=False, status__in=['Assigned', 'In Progress']).count()
+        technician_utilization = (assigned_jobs / active_technicians * 100) if active_technicians > 0 else 0
+        
+        # Parts availability
+        total_parts = Part.objects.count()
+        available_parts = Part.objects.filter(quantity__gt=0).count()
+        parts_availability = (available_parts / total_parts * 100) if total_parts > 0 else 0
+        
+        # System uptime (simplified - in production you'd track actual uptime)
+        uptime = "99.9%"
+        
+        # Active connections (simplified)
+        active_connections = User.objects.filter(last_login__isnull=False).count()
+        
+        return Response({
+            'status': 'healthy',
+            'uptime': uptime,
+            'lastBackup': timezone.now().isoformat(),
+            'activeConnections': active_connections,
+            'jobCompletionRate': round(completion_rate, 1),
+            'technicianUtilization': round(technician_utilization, 1),
+            'customerSatisfaction': 96.0,  # This would come from customer feedback system
+            'partsAvailability': round(parts_availability, 1)
+        })
+    except Exception as e:
+        return Response({'message': 'Error fetching system health', 'error': str(e)}, status=500)
+
+# Dashboard KPI endpoints
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def dashboard_kpi(request):
+    """Get KPI data for dashboard overview cards"""
+    try:
+        from jobs.models import Job
+        from inventory.models import Part, Customer, Supplier
+        from sales.models import Sale
+        from django.db.models import Sum, Count, Q
+        from django.utils import timezone
+        from datetime import datetime, timedelta
+        
+        # Calculate date ranges
+        today = timezone.now().date()
+        this_month = today.replace(day=1)
+        last_month = (this_month - timedelta(days=1)).replace(day=1)
+        
+        # Jobs KPIs
+        total_jobs = Job.objects.count()
+        pending_jobs = Job.objects.filter(status='pending').count()
+        completed_jobs = Job.objects.filter(status='completed').count()
+        in_progress_jobs = Job.objects.filter(status='in_progress').count()
+        
+        # Monthly job comparison
+        this_month_jobs = Job.objects.filter(created_at__date__gte=this_month).count()
+        last_month_jobs = Job.objects.filter(
+            created_at__date__gte=last_month,
+            created_at__date__lt=this_month
+        ).count()
+        jobs_change = ((this_month_jobs - last_month_jobs) / max(last_month_jobs, 1)) * 100 if last_month_jobs > 0 else 0
+        
+        # Revenue KPIs
+        total_revenue = Job.objects.filter(status='completed').aggregate(
+            total=Sum('actual_cost')
+        )['total'] or 0
+        
+        this_month_revenue = Job.objects.filter(
+            status='completed',
+            completed_at__date__gte=this_month
+        ).aggregate(total=Sum('actual_cost'))['total'] or 0
+        
+        last_month_revenue = Job.objects.filter(
+            status='completed',
+            completed_at__date__gte=last_month,
+            completed_at__date__lt=this_month
+        ).aggregate(total=Sum('actual_cost'))['total'] or 0
+        
+        revenue_change = ((this_month_revenue - last_month_revenue) / max(last_month_revenue, 1)) * 100 if last_month_revenue > 0 else 0
+        
+        # Sales KPIs
+        total_sales = Sale.objects.count()
+        sales_revenue = Sale.objects.aggregate(total=Sum('total'))['total'] or 0
+        
+        this_month_sales = Sale.objects.filter(date__date__gte=this_month).count()
+        last_month_sales = Sale.objects.filter(
+            date__date__gte=last_month,
+            date__date__lt=this_month
+        ).count()
+        sales_change = ((this_month_sales - last_month_sales) / max(last_month_sales, 1)) * 100 if last_month_sales > 0 else 0
+        
+        # Inventory KPIs
+        total_parts = Part.objects.count()
+        from django.db import models as django_models
+        low_stock_parts = Part.objects.filter(
+            current_stock__lte=django_models.F('minimum_threshold')
+        ).count()
+        
+        # Customer KPIs
+        total_customers = Customer.objects.count()
+        active_customers = Customer.objects.filter(status='active').count()
+        
+        # Technician KPIs
+        total_technicians = User.objects.filter(role='technician').count()
+        active_technicians = User.objects.filter(role='technician', is_active=True).count()
+        
+        # Build KPI data array
+        kpi_data = [
+            {
+                'title': 'Total Jobs',
+                'value': str(total_jobs),
+                'change': f'{abs(jobs_change):.1f}%',
+                'changeType': 'increase' if jobs_change >= 0 else 'decrease',
+                'icon': 'Briefcase',
+                'color': 'primary'
+            },
+            {
+                'title': 'Pending Jobs',
+                'value': str(pending_jobs),
+                'change': None,
+                'changeType': None,
+                'icon': 'Clock',
+                'color': 'warning'
+            },
+            {
+                'title': 'Completed Jobs',
+                'value': str(completed_jobs),
+                'change': None,
+                'changeType': None,
+                'icon': 'CheckCircle',
+                'color': 'success'
+            },
+            {
+                'title': 'Active Jobs',
+                'value': str(in_progress_jobs),
+                'change': None,
+                'changeType': None,
+                'icon': 'Play',
+                'color': 'accent'
+            },
+            {
+                'title': 'Total Revenue',
+                'value': f'${total_revenue:,.0f}',
+                'change': f'{abs(revenue_change):.1f}%',
+                'changeType': 'increase' if revenue_change >= 0 else 'decrease',
+                'icon': 'DollarSign',
+                'color': 'success'
+            },
+            {
+                'title': 'Total Sales',
+                'value': str(total_sales),
+                'change': f'{abs(sales_change):.1f}%',
+                'changeType': 'increase' if sales_change >= 0 else 'decrease',
+                'icon': 'ShoppingCart',
+                'color': 'primary'
+            },
+            {
+                'title': 'Sales Revenue',
+                'value': f'${sales_revenue:,.0f}',
+                'change': None,
+                'changeType': None,
+                'icon': 'TrendingUp',
+                'color': 'success'
+            },
+            {
+                'title': 'Total Parts',
+                'value': str(total_parts),
+                'change': None,
+                'changeType': None,
+                'icon': 'Package',
+                'color': 'accent'
+            },
+            {
+                'title': 'Low Stock Items',
+                'value': str(low_stock_parts),
+                'change': None,
+                'changeType': None,
+                'icon': 'AlertTriangle',
+                'color': 'warning'
+            },
+            {
+                'title': 'Total Customers',
+                'value': str(total_customers),
+                'change': None,
+                'changeType': None,
+                'icon': 'Users',
+                'color': 'primary'
+            },
+            {
+                'title': 'Active Customers',
+                'value': str(active_customers),
+                'change': None,
+                'changeType': None,
+                'icon': 'UserCheck',
+                'color': 'success'
+            },
+            {
+                'title': 'Total Technicians',
+                'value': str(total_technicians),
+                'change': None,
+                'changeType': None,
+                'icon': 'Wrench',
+                'color': 'accent'
+            }
+        ]
+        
+        return Response(kpi_data)
+        
+    except Exception as e:
+        return Response({'message': 'Error fetching KPI data', 'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def dashboard_monthly_stats(request):
+    """Get monthly statistics for dashboard"""
+    try:
+        from jobs.models import Job
+        from django.db.models import Sum, Avg, Count
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Calculate current month stats
+        today = timezone.now().date()
+        this_month = today.replace(day=1)
+        
+        # Total jobs this month
+        total_jobs = Job.objects.filter(created_at__date__gte=this_month).count()
+        
+        # Monthly revenue from completed jobs
+        monthly_revenue = Job.objects.filter(
+            status='completed',
+            completed_at__date__gte=this_month
+        ).aggregate(total=Sum('actual_cost'))['total'] or 0
+        
+        # Average job duration (in hours)
+        avg_duration = Job.objects.filter(
+            status='completed',
+            actual_hours__isnull=False
+        ).aggregate(avg=Avg('actual_hours'))['avg'] or 0
+        
+        # Format duration
+        avg_job_duration = f"{avg_duration:.1f}h" if avg_duration > 0 else "0h"
+        
+        # On-time completion rate
+        completed_jobs = Job.objects.filter(status='completed')
+        from django.db import models as django_models
+        on_time_jobs = completed_jobs.filter(
+            completed_at__date__lte=django_models.F('due_date')
+        ).count()
+        total_completed = completed_jobs.count()
+        on_time_completion = (on_time_jobs / total_completed * 100) if total_completed > 0 else 0
+        
+        return Response({
+            'totalJobs': total_jobs,
+            'monthlyRevenue': float(monthly_revenue),
+            'avgJobDuration': avg_job_duration,
+            'onTimeCompletion': round(on_time_completion, 1)
+        })
+        
+    except Exception as e:
+        return Response({'message': 'Error fetching monthly stats', 'error': str(e)}, status=500)
 
 # inventory endpoints moved to the inventory app

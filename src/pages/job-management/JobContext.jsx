@@ -21,7 +21,7 @@ export const JobProvider = ({ children }) => {
 
   // Get auth token from localStorage
   const getAuthToken = () => {
-    return localStorage.getItem('access_token');
+    return localStorage.getItem('token');
   };
 
   // Create headers with auth token

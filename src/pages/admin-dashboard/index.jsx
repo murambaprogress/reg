@@ -19,7 +19,7 @@ const AdminDashboard = () => {
     totalJobs: 0
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   useEffect(() => {
     fetchStats();
@@ -28,7 +28,7 @@ const AdminDashboard = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/admin/stats`, {
+      const response = await fetch(`${API_BASE}/auth/admin/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
