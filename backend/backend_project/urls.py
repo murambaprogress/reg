@@ -4,6 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
 from django.views.static import serve
+from api.frontend_views import SmartFrontendView
 import os
 
 urlpatterns = [
@@ -23,13 +24,23 @@ if settings.DEBUG:
 
 # Serve frontend static files and handle React routing
 frontend_dir = os.path.join(settings.BASE_DIR, 'static', 'frontend')
+build_dir = os.path.join(settings.BASE_DIR.parent, 'build')
 
-# Serve static assets from frontend folder
+# Serve static assets from frontend folder (primary)
 urlpatterns += [
     re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': os.path.join(frontend_dir, 'assets')}),
 ]
 
+# Serve static assets from build folder (fallback)
+if os.path.exists(build_dir):
+    urlpatterns += [
+        re_path(r'^build-assets/(?P<path>.*)$', serve, {'document_root': os.path.join(build_dir, 'assets')}),
+        re_path(r'^favicon\.ico$', serve, {'document_root': build_dir, 'path': 'favicon.ico'}),
+        re_path(r'^manifest\.json$', serve, {'document_root': build_dir, 'path': 'manifest.json'}),
+        re_path(r'^robots\.txt$', serve, {'document_root': build_dir, 'path': 'robots.txt'}),
+    ]
+
 # Catch-all pattern for React Router (must be last)
 urlpatterns += [
-    re_path(r'^(?!api/).*$', TemplateView.as_view(template_name='index.html'), name='frontend'),
+    re_path(r'^(?!api/).*$', SmartFrontendView.as_view(), name='frontend'),
 ]

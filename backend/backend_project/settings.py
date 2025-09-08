@@ -50,15 +50,17 @@ CSRF_EXEMPT_URLS = [
 
 ROOT_URLCONF = 'backend_project.urls'
 
-# Frontend template directory
+# Frontend template directories
 FRONTEND_DIR = os.path.join(BASE_DIR, 'static', 'frontend')
+BUILD_DIR = os.path.join(BASE_DIR.parent, 'build')  # Root build directory
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            FRONTEND_DIR,
-            os.path.join(BASE_DIR, 'templates'),  # Add fallback template directory
+            FRONTEND_DIR,                          # Primary: backend/static/frontend
+            os.path.join(BASE_DIR, 'templates'),   # Secondary: backend/templates
+            BUILD_DIR,                             # Fallback: build directory
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -101,7 +103,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Frontend static files (built React app)
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
+    os.path.join(BASE_DIR, 'static'),           # Primary: backend/static
+    BUILD_DIR,                                  # Fallback: build directory
 ]
 
 # Media files

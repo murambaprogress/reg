@@ -1,4 +1,4 @@
-# Django TemplateDoesNotExist Fix
+# Django TemplateDoesNotExist Fix with Build Directory Fallback
 
 ## Problem
 Your Django app was throwing a `TemplateDoesNotExist` error for `index.html` when deployed to PythonAnywhere. This happened because:
@@ -11,27 +11,38 @@ Your Django app was throwing a `TemplateDoesNotExist` error for `index.html` whe
 
 ### 1. Updated Django Settings (`backend/backend_project/settings.py`)
 - Removed the conditional check for the frontend directory existence
-- Added a fallback `templates` directory to the `TEMPLATES['DIRS']` configuration
-- Now Django will look for templates in both:
-  - `backend/static/frontend/` (original location)
-  - `backend/templates/` (fallback location)
+- Added multiple fallback directories to the `TEMPLATES['DIRS']` configuration
+- Added build directory to `STATICFILES_DIRS` for fallback static files
+- Now Django will look for templates in:
+  - `backend/static/frontend/` (primary location)
+  - `backend/templates/` (secondary location)
+  - `build/` (fallback location - root build directory)
 
 ### 2. Updated URL Configuration (`backend/backend_project/urls.py`)
 - Removed the conditional check for frontend directory existence
-- Ensured static file serving works consistently in both development and production
+- Added fallback static file serving from build directory
+- Added routes for build assets, favicon, manifest, and robots.txt
+- Implemented SmartFrontendView for intelligent template selection
 
-### 3. Created Template Directory and Fixed Paths
-- Created `backend/templates/` directory
-- Copied `index.html` to the templates directory
-- Updated asset paths in the HTML to use Django's static file serving:
-  - `/favicon.ico` → `/static/frontend/favicon.ico`
-  - `/manifest.json` → `/static/frontend/manifest.json`
-  - `/assets/...` → `/static/frontend/assets/...`
+### 3. Created Smart Frontend System
+- Created `backend/api/frontend_views.py` with `SmartFrontendView`
+- Smart view automatically detects available templates and static files
+- Falls back gracefully between different frontend configurations
+- Created multiple template versions:
+  - `backend/templates/index.html` - Uses `/static/frontend/assets/...`
+  - `backend/templates/index-build-fallback.html` - Uses `/build-assets/...`
+
+### 4. Enhanced Static File Serving
+- Primary: `/assets/...` → `backend/static/frontend/assets/...`
+- Fallback: `/build-assets/...` → `build/assets/...`
+- Direct serving of favicon.ico, manifest.json, robots.txt from build directory
 
 ## Files Modified
-1. `backend/backend_project/settings.py` - Updated template configuration
-2. `backend/backend_project/urls.py` - Removed conditional frontend serving
-3. `backend/templates/index.html` - Created with correct static paths
+1. `backend/backend_project/settings.py` - Enhanced template and static file configuration
+2. `backend/backend_project/urls.py` - Added smart frontend view and fallback routes
+3. `backend/templates/index.html` - Created with Django static paths
+4. `backend/templates/index-build-fallback.html` - Created with build directory paths
+5. `backend/api/frontend_views.py` - New smart frontend view with automatic fallback
 
 ## Deployment Steps for PythonAnywhere
 
