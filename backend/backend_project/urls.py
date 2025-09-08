@@ -23,13 +23,13 @@ if settings.DEBUG:
 
 # Serve frontend static files and handle React routing
 frontend_dir = os.path.join(settings.BASE_DIR, 'static', 'frontend')
-if os.path.exists(frontend_dir):
-    # Serve static assets from frontend folder
-    urlpatterns += [
-        re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': os.path.join(frontend_dir, 'assets')}),
-    ]
-    
-    # Catch-all pattern for React Router (must be last)
-    urlpatterns += [
-        re_path(r'^(?!api/).*$', TemplateView.as_view(template_name='index.html'), name='frontend'),
-    ]
+
+# Serve static assets from frontend folder
+urlpatterns += [
+    re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': os.path.join(frontend_dir, 'assets')}),
+]
+
+# Catch-all pattern for React Router (must be last)
+urlpatterns += [
+    re_path(r'^(?!api/).*$', TemplateView.as_view(template_name='index.html'), name='frontend'),
+]

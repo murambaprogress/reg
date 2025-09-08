@@ -56,7 +56,10 @@ FRONTEND_DIR = os.path.join(BASE_DIR, 'static', 'frontend')
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [FRONTEND_DIR] if os.path.exists(FRONTEND_DIR) else [],
+        'DIRS': [
+            FRONTEND_DIR,
+            os.path.join(BASE_DIR, 'templates'),  # Add fallback template directory
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
