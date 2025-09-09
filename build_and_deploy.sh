@@ -10,8 +10,8 @@ echo "📦 Building frontend..."
 npm run build
 
 # Check if build was successful
-if [ ! -d "dist" ]; then
-    echo "❌ Frontend build failed! dist directory not found."
+if [ ! -d "build" ]; then
+    echo "❌ Frontend build failed! build directory not found."
     exit 1
 fi
 
