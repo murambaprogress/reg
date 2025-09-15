@@ -2,9 +2,33 @@ import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import Icon from '../../../components/AppIcon';
 
-const RevenueChart = ({ chartType, setChartType }) => {
-  // Revenue data should be provided from backend or context
-  const revenueData = [];
+const RevenueChart = ({ chartType, setChartType, reportRows = [], monthlyData = null }) => {
+  // Use server-side monthlyData when available for faster rendering
+  let revenueData = [];
+  if (monthlyData && Array.isArray(monthlyData) && monthlyData.length) {
+    // expected monthlyData: [{ month: '2025-09-01T00:00:00Z', total_revenue: 123, total_estimated: 200 }, ...]
+    revenueData = monthlyData.map(m => {
+      let label = m.month;
+      try {
+        const d = new Date(m.month);
+        label = d.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+      } catch (e) {}
+      return { month: label, revenue: Number(m.total_revenue || 0), target: Number(m.total_estimated || 0) };
+    }).sort((a,b) => new Date(a.month) - new Date(b.month));
+  } else {
+    // Derive revenue per month from reportRows
+    const revenueMap = {};
+    reportRows.forEach(r => {
+      try {
+        const d = new Date(r.created_at);
+        const month = d.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+        revenueMap[month] = revenueMap[month] || { month, revenue: 0, target: 0 };
+        revenueMap[month].revenue += Number(r.actual_cost || 0) + Number(r.parts_cost || 0);
+        revenueMap[month].target += Number(r.estimated_cost || 0);
+      } catch (e) {}
+    });
+    revenueData = Object.values(revenueMap).sort((a,b) => new Date(a.month) - new Date(b.month));
+  }
 
   const chartTypes = [
     { value: 'line', label: 'Line Chart', icon: 'TrendingUp' },

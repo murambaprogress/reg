@@ -46,8 +46,7 @@ const PhotoCapture = ({ jobId, onPhotoCapture }) => {
 
   return (
     <div className="bg-surface rounded-lg border border-border p-6 shadow-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-heading-semibold text-text-primary">Photo Documentation</h3>
+      <div className="flex items-center justify-end mb-4">
         <Button
           variant="primary"
           onClick={handleCameraClick}

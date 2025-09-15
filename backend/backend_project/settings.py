@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'suppliers',
     'sales',
     'jobs',
+    'billing',
 ]
 
 MIDDLEWARE = [
@@ -77,6 +78,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend_project.wsgi.application'
 
 # Database (MySQL via PythonAnywhere)
+"""
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -84,6 +86,19 @@ DATABASES = {
         'USER': os.environ.get('DB_USER', 'Progress'),
         'PASSWORD': os.environ.get('DB_PASS', 'prog003done'),
         'HOST': os.environ.get('DB_HOST', 'Progress.mysql.pythonanywhere-services.com'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
+    }
+}
+"""
+
+#local db
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('DB_NAME', 'regimark_motors'),
+        'USER': os.environ.get('DB_USER', 'root'),
+        'PASSWORD': os.environ.get('DB_PASS', ''),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
@@ -184,8 +199,8 @@ EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('SYSTEM_EMAIL', '')
-EMAIL_HOST_PASSWORD = os.environ.get('SYSTEM_EMAIL_PASS', '')
+EMAIL_HOST_USER = os.environ.get('SYSTEM_EMAIL', 'pcjeche@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('SYSTEM_EMAIL_PASS', 'ntau nhyu kvue gsab')
 
 # Default from address (avoid webmaster@localhost)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)

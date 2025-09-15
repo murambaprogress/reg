@@ -1,6 +1,6 @@
 
 import { useDebtors } from './DebtorContext';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 const stateColors = {
   overdue: 'bg-red-200 text-red-800',
@@ -11,14 +11,25 @@ const stateColors = {
 const PAGE_SIZE = 5;
 
 const DebtorsTable = () => {
-  const { debtors } = useDebtors();
+  const { debtors, loading, error } = useDebtors();
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
 
-  const filtered = debtors.filter(d =>
-    d.name.toLowerCase().includes(search.toLowerCase())
+  const normalized = useMemo(() => (debtors || []).map(d => ({
+    id: d.id,
+    name: d.customer_name || d.name || 'Unknown',
+    phone: d.customer_phone || '',
+    amount: Number(d.total_outstanding || 0),
+    status: d.status,
+    oldestInvoiceDate: d.oldest_invoice_date || '',
+    daysOverdue: d.days_overdue || 0,
+  })), [debtors]);
+
+  const filtered = normalized.filter(d =>
+    d.name.toLowerCase().includes(search.toLowerCase()) ||
+    d.phone.toLowerCase().includes(search.toLowerCase())
   );
 
   const sorted = [...filtered].sort((a, b) => {
@@ -39,9 +50,7 @@ const DebtorsTable = () => {
   };
 
   // Calculate totals for all filtered debtors
-  const totalAmount = filtered.reduce((sum, d) => sum + (d.amount || 0), 0);
-  const totalPaid = filtered.reduce((sum, d) => sum + ((d.payments || []).reduce((pSum, p) => pSum + (p.amount || 0), 0)), 0);
-  const totalDue = totalAmount - totalPaid;
+  const totalOutstanding = filtered.reduce((sum, d) => sum + (d.amount || 0), 0);
 
   return (
     <div>
@@ -56,62 +65,51 @@ const DebtorsTable = () => {
         <div className="flex gap-2 items-center">
           <span className="text-xs text-gray-500">Sort by:</span>
           <button className="text-xs underline" onClick={() => handleSort('name')}>Name</button>
-          <button className="text-xs underline" onClick={() => handleSort('amount')}>Amount</button>
-          <button className="text-xs underline" onClick={() => handleSort('dueDate')}>Due Date</button>
+          <button className="text-xs underline" onClick={() => handleSort('amount')}>Outstanding</button>
+          <button className="text-xs underline" onClick={() => handleSort('oldestInvoiceDate')}>Oldest</button>
         </div>
       </div>
+      {error && (<div className="text-red-600 text-sm mb-2">{error}</div>)}
       <table className="min-w-full bg-white border">
         <thead>
           <tr>
             <th className="py-2 px-4 border-b">Name</th>
-            <th className="py-2 px-4 border-b">Products Supplied</th>
-            <th className="py-2 px-4 border-b">Amount</th>
-            <th className="py-2 px-4 border-b">State</th>
-            <th className="py-2 px-4 border-b">Due Date</th>
+            <th className="py-2 px-4 border-b">Outstanding</th>
+            <th className="py-2 px-4 border-b">Status</th>
+            <th className="py-2 px-4 border-b">Oldest Invoice</th>
+            <th className="py-2 px-4 border-b">Days Overdue</th>
           </tr>
         </thead>
         <tbody>
-          {paginated.length === 0 ? (
-            <tr><td colSpan={7} className="text-center py-4 text-gray-400">No debtors found.</td></tr>
-          ) : paginated.map(debtor => {
-            const totalPaid = (debtor.payments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
-            const amountDue = (debtor.amount || 0) - totalPaid;
-            return (
-              <tr key={debtor.id}>
-                <td className="py-2 px-4 border-b">{debtor.name}</td>
-                <td className="py-2 px-4 border-b">{debtor.productsSupplied || '-'}</td>
-                <td className="py-2 px-4 border-b">
-                  ${debtor.amount}
-                  <div className="text-xs text-text-secondary mt-1">
-                    Paid: <span className="text-green-700">${totalPaid}</span> <br />
-                    Due: <span className="text-red-700">${amountDue}</span>
-                  </div>
-                </td>
-                <td className={`py-2 px-4 border-b`}>
-                  <span className={`px-2 py-1 rounded ${stateColors[debtor.state]}`}>{debtor.state}</span>
-                </td>
-                <td className="py-2 px-4 border-b">{debtor.dueDate}</td>
-              </tr>
-            );
-          })}
-          {/* Totals Row */}
-          {filtered.length > 0 && (
-            <tr className="bg-gray-100 font-heading-medium">
-              <td className="py-2 px-4 text-right" colSpan={2}>Totals:</td>
-              <td className="py-2 px-4 text-primary">
-                ${totalAmount}
-                <div className="text-xs text-text-secondary mt-1">
-                  Paid: <span className="text-green-700">${totalPaid}</span> <br />
-                  Due: <span className="text-red-700">${totalDue}</span>
-                </div>
+          {loading && (
+            <tr><td colSpan={8} className="text-center py-4 text-gray-400">Loading...</td></tr>
+          )}
+          {!loading && paginated.length === 0 && (
+            <tr><td colSpan={8} className="text-center py-4 text-gray-400">No debtors found.</td></tr>
+          )}
+          {!loading && paginated.map(debtor => (
+            <tr key={debtor.id}>
+              <td className="py-2 px-4 border-b">{debtor.name}</td>
+              <td className="py-2 px-4 border-b">${debtor.amount.toFixed(2)}</td>
+              <td className="py-2 px-4 border-b">
+                <span className={`px-2 py-1 rounded ${stateColors[debtor.status in stateColors ? debtor.status : (debtor.amount>0?'overdue':'paid')]}`}>{debtor.status || (debtor.amount>0?'overdue':'paid')}</span>
               </td>
-              <td colSpan={2}></td>
+              <td className="py-2 px-4 border-b">{debtor.oldestInvoiceDate || '-'}</td>
+              <td className="py-2 px-4 border-b">{debtor.daysOverdue}</td>
+            </tr>
+          ))}
+          {/* Totals Row */}
+          {!loading && filtered.length > 0 && (
+            <tr className="bg-gray-100 font-heading-medium">
+              <td className="py-2 px-4 text-right" colSpan={1}>Totals:</td>
+              <td className="py-2 px-4 text-primary">${totalOutstanding.toFixed(2)}</td>
+              <td colSpan={3}></td>
             </tr>
           )}
         </tbody>
       </table>
       <div className="flex justify-between items-center mt-2">
-        <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
+  <span className="text-xs text-gray-500">Page {page} of {totalPages || 1}</span>
         <div className="flex gap-2">
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-2 py-1 border rounded disabled:opacity-50">Previous</button>
           <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="px-2 py-1 border rounded disabled:opacity-50">Next</button>

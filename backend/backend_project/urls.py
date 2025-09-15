@@ -9,12 +9,15 @@ import os
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/', include('api.urls')),
+    # Backwards-compatible alias: some clients still call /api/auth/... endpoints
     path('api/auth/', include('api.urls')),
     path('api/inventory/', include('inventory.urls')),
     path('api/customers/', include('customers.urls')),
     path('api/suppliers/', include('suppliers.urls')),
     path('api/sales/', include('sales.urls')),
     path('api/jobs/', include('jobs.urls')),
+    path('api/billing/', include('billing.urls')),
 ]
 
 # Serve static files in development

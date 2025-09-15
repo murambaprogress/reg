@@ -46,7 +46,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
   const fetchTechnicians = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/admin/technicians`, {
+      const response = await fetch(`${API_BASE}/jobs/technicians/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -55,7 +55,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
       
       if (response.ok) {
         const data = await response.json();
-        setTechnicians(data.filter(tech => tech.is_active));
+        setTechnicians(data);
       }
     } catch (error) {
       console.error('Error fetching technicians:', error);
@@ -70,7 +70,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/jobs/${selectedJob.id}/assign`, {
+      const response = await fetch(`${API_BASE}/jobs/${selectedJob.id}/assign/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -104,7 +104,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/jobs/${jobId}/unassign`, {
+      const response = await fetch(`${API_BASE}/jobs/${jobId}/unassign/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

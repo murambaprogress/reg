@@ -43,8 +43,10 @@ const PersonalExpensesModal = ({ isOpen, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Personal expense submitted:', formData);
+    // Show "Coming soon" message instead of submitting
+    if (typeof window !== 'undefined' && window.__SHOW_TOAST) {
+      window.__SHOW_TOAST('Personal expenses feature is coming soon!', 'info');
+    }
     onClose();
   };
 

@@ -7,6 +7,7 @@ import Footer from 'components/ui/Footer';
 import { UserProvider } from "./components/UserContext";
 import { SalesProvider } from "./pages/sales-shop/SalesContext";
 import { InventoryProvider } from "./pages/inventory-management/InventoryContext";
+import { TechnicianProvider } from "./pages/technician-workstation/TechnicianContext";
 import { useUser } from "./components/UserContext";
 // Add your imports here
 import DashboardOverview from "pages/dashboard-overview";
@@ -17,6 +18,7 @@ import TechnicianWorkstation from "pages/technician-workstation";
 import JobManagement from "pages/job-management";
 import CustomerManagement from "pages/customer-management";
 import BillingExpenses from "pages/billing-expenses";
+import { BillingProvider } from "pages/billing-expenses/BillingContext";
 import NotFound from "pages/NotFound";
 import SupplierManagement from "pages/supplier-management";
 import SalesShop from "pages/sales-shop";
@@ -102,11 +104,11 @@ const Routes = () => {
             {/* Root path shows login for unauthenticated users */}
             <Route path="/" element={<AuthRedirect element={<Login />} />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/dashboard-overview" element={<ProtectedRoute element={<DashboardOverview />} allowedRoles={["admin","supervisor","technician"]} />} />
+            <Route path="/dashboard-overview" element={<ProtectedRoute element={<BillingProvider><DashboardOverview /></BillingProvider>} allowedRoles={["admin","supervisor"]} />} />
             <Route path="/inventory-management" element={<ProtectedRoute element={<InventoryManagement />} allowedRoles={["admin","supervisor"]} />} />
             <Route path="/reports-analytics" element={<ProtectedRoute element={<ReportsAnalytics />} allowedRoles={["admin","supervisor"]} />} />
-            <Route path="/technician-workstation" element={<ProtectedRoute element={<TechnicianWorkstation />} allowedRoles={["admin","supervisor","technician"]} />} />
-            <Route path="/job-management" element={<ProtectedRoute element={<JobManagement />} allowedRoles={["admin","supervisor","technician"]} />} />
+            <Route path="/technician-workstation" element={<ProtectedRoute element={<TechnicianProvider><TechnicianWorkstation /></TechnicianProvider>} allowedRoles={["technician"]} />} />
+            <Route path="/job-management" element={<ProtectedRoute element={<JobManagement />} allowedRoles={["admin","supervisor"]} />} />
             <Route path="/customer-management" element={<ProtectedRoute element={<CustomerManagement />} allowedRoles={["admin","supervisor"]} />} />
             <Route path="/billing-expenses" element={<ProtectedRoute element={<BillingExpenses />} allowedRoles={["admin","supervisor"]} />} />
             <Route path="/supplier-management" element={<ProtectedRoute element={<SupplierManagement />} allowedRoles={["admin","supervisor"]} />} />

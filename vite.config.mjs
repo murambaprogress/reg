@@ -14,8 +14,14 @@ export default defineConfig({
   plugins: [tsconfigPaths(), react(), tagger()],
   server: {
     port: 3001,
-    host: "0.0.0.0",
+    host: "localhost",
     strictPort: false,
-    allowedHosts: ['.amazonaws.com', '.builtwithrocket.new']
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 });

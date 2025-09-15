@@ -7,6 +7,9 @@ import { useUser } from '../../components/UserContext';
 import TechnicianManagement from './components/TechnicianManagement';
 import JobAssignment from './components/JobAssignment';
 import SystemOverview from './components/SystemOverview';
+import TechnicianProgress from './components/TechnicianProgress';
+import AdminOverview from './components/AdminOverview';
+import PartsRequestApproval from './components/PartsRequestApproval';
 
 const AdminDashboard = () => {
   const { user } = useUser();
@@ -23,6 +26,15 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchStats();
+    
+    // Set up auto-sync every 30 seconds to get real-time updates from technicians
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 30000);
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const fetchStats = async () => {
@@ -45,21 +57,28 @@ const AdminDashboard = () => {
   };
 
   const tabs = [
-    { id: 'overview', label: 'System Overview', icon: 'BarChart3' },
+    { id: 'overview', label: 'Dashboard Overview', icon: 'BarChart3' },
     { id: 'technicians', label: 'Technician Management', icon: 'Users' },
-    { id: 'assignments', label: 'Job Assignment', icon: 'ClipboardList' }
+    { id: 'assignments', label: 'Job Assignment', icon: 'ClipboardList' },
+    { id: 'progress', label: 'Technician Progress', icon: 'Activity' },
+    { id: 'parts', label: 'Parts Requests', icon: 'Package' }
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <SystemOverview stats={stats} onRefresh={fetchStats} />;
+        return <AdminOverview onStatsUpdate={fetchStats} />;
+      // 'system' tab removed
       case 'technicians':
         return <TechnicianManagement onStatsUpdate={fetchStats} />;
       case 'assignments':
         return <JobAssignment onStatsUpdate={fetchStats} />;
+      case 'progress':
+        return <TechnicianProgress onStatsUpdate={fetchStats} />;
+      case 'parts':
+        return <PartsRequestApproval />;
       default:
-        return <SystemOverview stats={stats} onRefresh={fetchStats} />;
+        return <AdminOverview onStatsUpdate={fetchStats} />;
     }
   };
 
@@ -80,61 +99,18 @@ const AdminDashboard = () => {
                 Manage technicians, assign jobs, and monitor system performance
               </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-success rounded-full"></div>
-              <span className="text-sm text-text-secondary">System Online</span>
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <div className="bg-surface rounded-lg p-6 border border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-body-medium text-text-secondary">Total Technicians</p>
-                  <p className="text-2xl font-heading-bold text-text-primary">{stats.totalTechnicians}</p>
-                </div>
-                <Icon name="Users" size={24} className="text-accent" />
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-success rounded-full"></div>
+                <span className="text-sm text-text-secondary">System Online</span>
               </div>
-            </div>
-            
-            <div className="bg-surface rounded-lg p-6 border border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-body-medium text-text-secondary">Active Technicians</p>
-                  <p className="text-2xl font-heading-bold text-success">{stats.activeTechnicians}</p>
-                </div>
-                <Icon name="UserCheck" size={24} className="text-success" />
+              <div className="flex items-center space-x-2 text-sm text-text-secondary">
+                <Icon name="Users" size={16} />
+                <span>{stats.activeTechnicians}/{stats.totalTechnicians} Technicians</span>
               </div>
-            </div>
-            
-            <div className="bg-surface rounded-lg p-6 border border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-body-medium text-text-secondary">Pending Jobs</p>
-                  <p className="text-2xl font-heading-bold text-warning">{stats.pendingJobs}</p>
-                </div>
-                <Icon name="Clock" size={24} className="text-warning" />
-              </div>
-            </div>
-            
-            <div className="bg-surface rounded-lg p-6 border border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-body-medium text-text-secondary">Completed Today</p>
-                  <p className="text-2xl font-heading-bold text-success">{stats.completedJobs}</p>
-                </div>
-                <Icon name="CheckCircle" size={24} className="text-success" />
-              </div>
-            </div>
-            
-            <div className="bg-surface rounded-lg p-6 border border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-body-medium text-text-secondary">Total Jobs</p>
-                  <p className="text-2xl font-heading-bold text-text-primary">{stats.totalJobs}</p>
-                </div>
-                <Icon name="Briefcase" size={24} className="text-accent" />
+              <div className="flex items-center space-x-2 text-sm text-text-secondary">
+                <Icon name="Clipboard" size={16} />
+                <span>{stats.totalJobs} Total Jobs</span>
               </div>
             </div>
           </div>

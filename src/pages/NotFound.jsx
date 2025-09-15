@@ -2,12 +2,18 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from 'components/ui/Button';
 import Icon from 'components/AppIcon';
+import { useUser } from 'components/UserContext';
 
 const NotFound = () => {
   const navigate = useNavigate();
+  const { user, logout } = useUser();
 
   const handleGoHome = () => {
     navigate('/');
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (

@@ -20,6 +20,16 @@ const SystemOverview = ({ stats, onRefresh }) => {
   useEffect(() => {
     fetchRecentActivity();
     fetchSystemHealth();
+    
+    // Set up auto-sync every 30 seconds to get real-time updates
+    const interval = setInterval(() => {
+      fetchRecentActivity();
+      fetchSystemHealth();
+    }, 30000);
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const fetchRecentActivity = async () => {
@@ -106,8 +116,7 @@ const SystemOverview = ({ stats, onRefresh }) => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-heading-semibold text-text-primary">System Overview</h2>
-          <p className="text-sm text-text-secondary">Monitor system health and recent activity</p>
+          {/* Header removed as requested */}
         </div>
         <Button
           onClick={() => {

@@ -11,7 +11,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedTechnician, setSelectedTechnician] = useState('');
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
 
   useEffect(() => {
     fetchJobs();
@@ -46,7 +46,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
   const fetchTechnicians = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/technicians`, {
+      const response = await fetch(`${API_BASE}/jobs/technicians/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -55,7 +55,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
       
       if (response.ok) {
         const data = await response.json();
-        setTechnicians(data.filter(tech => tech.is_active));
+        setTechnicians(data);
       }
     } catch (error) {
       console.error('Error fetching technicians:', error);
@@ -70,7 +70,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/jobs/${selectedJob.id}/assign`, {
+      const response = await fetch(`${API_BASE}/jobs/${selectedJob.id}/assign/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -104,7 +104,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/jobs/${jobId}/unassign`, {
+      const response = await fetch(`${API_BASE}/jobs/${jobId}/unassign/`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -132,16 +132,25 @@ const JobAssignment = ({ onStatsUpdate }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
+      case 'pending':
       case 'Pending':
         return 'bg-warning/10 text-warning';
+      case 'in_progress':
       case 'Assigned':
-        return 'bg-accent/10 text-accent';
       case 'In Progress':
-        return 'bg-primary/10 text-primary';
+        return 'bg-accent/10 text-accent';
+      case 'ready_to_collect':
+      case 'Ready to Collect':
+        return 'bg-info/10 text-info';
+      case 'completed':
       case 'Completed':
         return 'bg-success/10 text-success';
+      case 'cancelled':
       case 'Cancelled':
         return 'bg-error/10 text-error';
+      case 'on_hold':
+      case 'On Hold':
+        return 'bg-secondary/10 text-secondary';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -354,32 +363,28 @@ const JobAssignment = ({ onStatsUpdate }) => {
                   required
                 >
                   <option value="">Choose a technician...</option>
-                  {technicians.map((technician) => (
-                    <option key={technician.id} value={technician.id}>
-                      {technician.username} ({technician.assigned_jobs_count || 0} jobs)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowAssignModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleAssignJob}>
-                  Assign Job
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default JobAssignment;
+                                    {technicians.map((technician) => (
+                                      <option key={technician.id} value={technician.id}>
+                                        {technician.username} ({technician.assigned_jobs_count || 0} jobs)
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                  
+                                <div className="flex justify-end space-x-3">
+                                  <Button variant="outline" onClick={() => setShowAssignModal(false)}>
+                                    Cancel
+                                  </Button>
+                                  <Button onClick={handleAssignJob}>
+                                    Assign Job
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
+                  
+                  export default JobAssignment;

@@ -3,6 +3,7 @@ import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import { useSales } from '../SalesContext';
 import { useInventory } from '../../inventory-management/InventoryContext';
+import { useSuppliers } from '../../supplier-management/SupplierContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
@@ -13,6 +14,8 @@ const AddSaleModal = ({ isOpen, onClose, sale = null, onSaleAdded }) => {
   const [customer, setCustomer] = useState(sale?.customer?.name || '');
   const [customerId, setCustomerId] = useState(sale?.customer?.id ?? null);
   const [customers, setCustomers] = useState([]);
+  const [supplier, setSupplier] = useState(sale?.supplier?.name || '');
+  const [supplierId, setSupplierId] = useState(sale?.supplier?.id ?? null);
   const [items, setItems] = useState(sale?.items || [{ partNumber: '', name: '', qty: '', unit: 0 }]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -23,6 +26,8 @@ const AddSaleModal = ({ isOpen, onClose, sale = null, onSaleAdded }) => {
   const { addSale, editSale } = salesContext || {};
   const inventoryContext = useInventory();
   const { parts } = inventoryContext || { parts: [] };
+  const suppliersContext = useSuppliers();
+  const { suppliers = [], createSupplier } = suppliersContext || {};
 
   // Debug inventory data
   useEffect(() => {
@@ -53,6 +58,8 @@ const AddSaleModal = ({ isOpen, onClose, sale = null, onSaleAdded }) => {
     // Reset form state
     setCustomer(sale?.customer?.name || '');
     setCustomerId(sale?.customer?.id ?? null);
+    setSupplier(sale?.supplier?.name || '');
+    setSupplierId(sale?.supplier?.id ?? null);
     // Map backend fields to frontend fields
     const mappedItems = sale?.items?.map(item => ({
       partNumber: item.part_number || '',
@@ -140,6 +147,10 @@ const AddSaleModal = ({ isOpen, onClose, sale = null, onSaleAdded }) => {
         ...(customerId ? { customer_id: customerId } : {}),
         // Always send customer_name if there's a name entered
         ...(customer ? { customer_name: customer } : {}),
+        // Only send supplier_id if a supplier was selected from the dropdown
+        ...(supplierId ? { supplier_id: supplierId } : {}),
+        // Always send supplier_name if there's a name entered
+        ...(supplier ? { supplier_name: supplier } : {}),
         // Only send valid items
         items: validItems.map(item => ({
           part_number: item.partNumber,
@@ -199,51 +210,108 @@ const AddSaleModal = ({ isOpen, onClose, sale = null, onSaleAdded }) => {
       <div className="bg-surface rounded-lg p-6 w-full max-w-2xl">
         <h3 className="text-lg font-heading-medium text-text-primary mb-4">{sale ? 'Edit Sale' : 'New Sale'}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex gap-2">
-            <div className="w-1/2">
-              <Input 
-                placeholder="Enter customer name" 
-                value={customer} 
-                onChange={(e) => {
-                  setCustomer(e.target.value);
-                  // Clear selected customer ID when typing
-                  if (customerId) setCustomerId(null);
-                }}
-              />
-              {customers.length > 0 && !customerId && (
-                <div className="mt-1 text-xs text-text-secondary">
-                  <button
-                    type="button"
-                    className="text-primary hover:underline"
-                    onClick={() => {
-                      const existingCustomer = customers.find(c => c.name.toLowerCase() === customer.toLowerCase());
-                      if (existingCustomer) {
-                        setCustomerId(existingCustomer.id);
-                      }
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Customer Section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-text-primary">Customer</label>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Input 
+                    placeholder="Enter customer name" 
+                    value={customer} 
+                    onChange={(e) => {
+                      setCustomer(e.target.value);
+                      // Clear selected customer ID when typing
+                      if (customerId) setCustomerId(null);
                     }}
-                  >
-                    Check for existing customer
-                  </button>
+                  />
+                  {customers.length > 0 && !customerId && (
+                    <div className="mt-1 text-xs text-text-secondary">
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => {
+                          const existingCustomer = customers.find(c => c.name.toLowerCase() === customer.toLowerCase());
+                          if (existingCustomer) {
+                            setCustomerId(existingCustomer.id);
+                          }
+                        }}
+                      >
+                        Check for existing customer
+                      </button>
+                    </div>
+                  )}
                 </div>
+              </div>
+              {customers.length > 0 && (
+                <select 
+                  value={customerId ?? ''} 
+                  onChange={(e) => { 
+                    const val = e.target.value;
+                    setCustomerId(val ? Number(val) : null);
+                    const sel = customers.find(c => String(c.id) === val);
+                    setCustomer(sel ? sel.name : '');
+                  }} 
+                  className="w-full p-2 border border-border rounded"
+                >
+                  <option value="">Select existing customer (optional)</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               )}
             </div>
-            {customers.length > 0 && (
-              <select 
-                value={customerId ?? ''} 
-                onChange={(e) => { 
-                  const val = e.target.value;
-                  setCustomerId(val ? Number(val) : null);
-                  const sel = customers.find(c => String(c.id) === val);
-                  setCustomer(sel ? sel.name : '');
-                }} 
-                className="p-2 border border-border rounded w-1/2"
-              >
-                <option value="">Select existing customer (optional)</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            )}
+
+            {/* Supplier Section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-text-primary">Supplier (Optional)</label>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Input 
+                    placeholder="Enter supplier name" 
+                    value={supplier} 
+                    onChange={(e) => {
+                      setSupplier(e.target.value);
+                      // Clear selected supplier ID when typing
+                      if (supplierId) setSupplierId(null);
+                    }}
+                  />
+                  {suppliers.length > 0 && !supplierId && supplier && (
+                    <div className="mt-1 text-xs text-text-secondary">
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => {
+                          const existingSupplier = suppliers.find(s => s.name.toLowerCase() === supplier.toLowerCase());
+                          if (existingSupplier) {
+                            setSupplierId(existingSupplier.id);
+                          }
+                        }}
+                      >
+                        Check for existing supplier
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {suppliers.length > 0 && (
+                <select 
+                  value={supplierId ?? ''} 
+                  onChange={(e) => { 
+                    const val = e.target.value;
+                    setSupplierId(val ? Number(val) : null);
+                    const sel = suppliers.find(s => String(s.id) === val);
+                    setSupplier(sel ? sel.name : '');
+                  }} 
+                  className="w-full p-2 border border-border rounded"
+                >
+                  <option value="">Select existing supplier (optional)</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">

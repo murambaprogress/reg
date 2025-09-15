@@ -17,7 +17,7 @@ export const JobProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = 'http://localhost:8000/api';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   // Get auth token from localStorage
   const getAuthToken = () => {
@@ -233,6 +233,34 @@ export const JobProvider = ({ children }) => {
     }
   };
 
+  // Fetch unassigned jobs
+  const fetchUnassignedJobs = async (filters = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      // Add filters to query params
+      if (filters.status) queryParams.append('status', filters.status);
+      if (filters.priority) queryParams.append('priority', filters.priority);
+      if (filters.search) queryParams.append('search', filters.search);
+
+      const url = `${API_BASE_URL}/jobs/unassigned/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch unassigned jobs: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (err) {
+      console.error('Error fetching unassigned jobs:', err);
+      return [];
+    }
+  };
+
   // Fetch available technicians
   const fetchTechnicians = async () => {
     try {
@@ -294,6 +322,74 @@ export const JobProvider = ({ children }) => {
     }
   };
 
+  // Assign job to technician
+  const assignJob = async (jobId, technicianId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/assign/`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ assigned_technician: technicianId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to assign job: ${response.statusText}`);
+      }
+
+      // Refresh jobs to get updated data
+      await fetchJobs();
+      return true;
+    } catch (err) {
+      console.error('Error assigning job:', err);
+      throw err;
+    }
+  };
+
+  // Reassign job to different technician
+  const reassignJob = async (jobId, technicianId, reason = '') => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/reassign/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ technician_id: technicianId, reason }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to reassign job: ${response.statusText}`);
+      }
+
+      // Refresh jobs to get updated data
+      await fetchJobs();
+      return true;
+    } catch (err) {
+      console.error('Error reassigning job:', err);
+      throw err;
+    }
+  };
+
+  // Unassign job from technician
+  const unassignJob = async (jobId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/unassign/`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to unassign job: ${response.statusText}`);
+      }
+
+      // Refresh jobs to get updated data
+      await fetchJobs();
+      return true;
+    } catch (err) {
+      console.error('Error unassigning job:', err);
+      throw err;
+    }
+  };
+
   // Bulk operations
   const bulkUpdateJobStatus = async (jobIds, status) => {
     const promises = jobIds.map(jobId => updateJobStatus(jobId, status));
@@ -347,9 +443,15 @@ export const JobProvider = ({ children }) => {
     deleteJob,
     updateJobStatus,
 
+    // Job assignment
+    assignJob,
+    reassignJob,
+    unassignJob,
+
     // Helper data
     fetchCustomers,
     fetchTechnicians,
+    fetchUnassignedJobs,
 
     // Job parts
     addJobPart,

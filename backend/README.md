@@ -38,10 +38,10 @@ python manage.py runserver
 ```
 
 API endpoints:
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/verify-otp
-- POST /api/auth/create-technician (admin only, Bearer token)
+- POST /api/register
+- POST /api/login
+- POST /api/verify-otp
+- POST /api/create-technician (admin only, Bearer token)
 
 These endpoints accept and return JSON. Example register payload:
 

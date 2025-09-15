@@ -1,11 +1,53 @@
-import React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import React, { useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 import Icon from '../../../components/AppIcon';
 
-const ServiceAnalytics = () => {
-  // Service data and monthly trends should be provided from backend or context
-  const serviceData = [];
-  const monthlyTrends = [];
+const ServiceAnalytics = ({ reportRows = [], serviceTrends = null }) => {
+  const [chartType, setChartType] = useState('pie');
+
+  // Prefer server-side serviceTrends when provided. Expected shape:
+  // { distribution: [{ name, value, revenue, jobs, color }, ...], monthly: [{ month: '2025-09-01T00:00:00Z', categories: { OilChange: 10, BrakeService: 5 } }, ...] }
+  let serviceData = [];
+  let monthlyTrends = [];
+
+  if (serviceTrends && typeof serviceTrends === 'object') {
+    serviceData = Array.isArray(serviceTrends.distribution) ? serviceTrends.distribution : [];
+    monthlyTrends = Array.isArray(serviceTrends.monthly) ? serviceTrends.monthly.map(m => {
+      // normalize month label
+      let label = m.month;
+      try { label = new Date(m.month).toLocaleString(undefined, { month: 'short', year: 'numeric' }); } catch(e){}
+      return { ...m, month: label };
+    }) : [];
+  } else {
+    // Aggregate services and monthly trends locally
+    const serviceMap = {};
+    const monthlyMap = {};
+    reportRows.forEach(r => {
+      const services = (r.service_description || '').split(',').map(s => s.trim()).filter(Boolean);
+      const serviceKey = services.length ? services[0] : 'Other';
+      const srec = serviceMap[serviceKey] = serviceMap[serviceKey] || { name: serviceKey, value: 0, revenue: 0, jobs: 0, color: '' };
+      srec.value += 1;
+      srec.revenue += Number(r.actual_cost || 0) + Number(r.parts_cost || 0);
+      srec.jobs += 1;
+
+      try {
+        const d = new Date(r.created_at);
+        const month = d.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+        monthlyMap[month] = monthlyMap[month] || { month };
+        const key = serviceKey.replace(/\s+/g,'');
+        monthlyMap[month][key] = (monthlyMap[month][key] || 0) + 1;
+      } catch (e) {}
+    });
+
+    serviceData = Object.values(serviceMap).map((s, i) => ({ ...s, color: ['#4A90E2','#10B981','#F59E0B','#EF4444'][i % 4] }));
+    monthlyTrends = Object.values(monthlyMap).sort((a,b) => new Date(a.month) - new Date(b.month));
+  }
+
+  const chartTypes = [
+    { value: 'pie', label: 'Pie Chart', icon: 'PieChart' },
+    { value: 'bar', label: 'Bar Chart', icon: 'BarChart3' },
+    { value: 'line', label: 'Line Chart', icon: 'TrendingUp' }
+  ];
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -63,28 +105,82 @@ const ServiceAnalytics = () => {
             <h3 className="text-lg font-heading-medium text-text-primary">Service Type Distribution</h3>
             <p className="text-sm text-text-secondary mt-1">Breakdown by service category</p>
           </div>
+          <div className="flex items-center space-x-2">
+            {chartTypes.map(type => (
+              <button
+                key={type.value}
+                onClick={() => setChartType(type.value)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-body-medium transition-all duration-200 ${
+                  chartType === type.value
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-background'
+                }`}
+              >
+                <Icon name={type.icon} size={16} />
+                <span>{type.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pie Chart */}
+          {/* Chart */}
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={serviceData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {serviceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
+              {chartType === 'pie' ? (
+                <PieChart>
+                  <Pie
+                    data={serviceData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {serviceData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              ) : chartType === 'bar' ? (
+                <BarChart data={serviceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="var(--color-text-secondary)"
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="var(--color-text-secondary)"
+                    fontSize={12}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="jobs" fill="var(--color-accent)" name="Jobs" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              ) : (
+                <LineChart data={serviceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="var(--color-text-secondary)"
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="var(--color-text-secondary)"
+                    fontSize={12}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="jobs" 
+                    stroke="var(--color-accent)" 
+                    strokeWidth={3}
+                    name="Jobs"
+                  />
+                </LineChart>
+              )}
             </ResponsiveContainer>
           </div>
 

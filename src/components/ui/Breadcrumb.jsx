@@ -18,10 +18,10 @@ const Breadcrumb = () => {
     const pathSegments = location.pathname.split('/').filter(segment => segment);
     const breadcrumbs = [];
     
-    // Always start with Dashboard as home
+    // Always start with Dashboard as home; but show Technician Workstation when user is on that route
     breadcrumbs.push({
-      label: 'Dashboard',
-      path: '/dashboard-overview',
+      label: location.pathname === '/technician-workstation' ? 'Technician Workstation' : 'Dashboard',
+      path: location.pathname === '/technician-workstation' ? '/technician-workstation' : '/dashboard-overview',
       isActive: false
     });
 

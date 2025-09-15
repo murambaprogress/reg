@@ -17,7 +17,24 @@ export const TechnicianProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [notifications, setNotifications] = useState([]);
 
-  const API_BASE_URL = 'http://localhost:8000/api';
+  // Prefer explicit env var, fallback to relative '/api' so dev proxy serves responses
+  let API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
+  if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
+
+  // Safe JSON parser to surface HTML / unexpected responses clearly
+  const safeParseJSON = async (response) => {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        return await response.json();
+      } catch (e) {
+        throw new Error(`Invalid JSON body (status ${response.status})`);
+      }
+    }
+    const text = await response.text();
+    const preview = text.slice(0, 160).replace(/\s+/g, ' ');
+    throw new Error(`Non-JSON response (status ${response.status}). Preview: ${preview}`);
+  };
 
   // Get auth token from localStorage
   const getAuthToken = () => {
@@ -60,10 +77,16 @@ export const TechnicianProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch jobs: ${response.statusText}`);
+        // Try to capture any HTML error message
+        let errorDetail = '';
+        try {
+          const text = await response.text();
+          errorDetail = text.slice(0, 120).replace(/\s+/g, ' ');
+        } catch { /* ignore */ }
+        throw new Error(`Failed to fetch jobs (${response.status}): ${response.statusText} ${errorDetail}`.trim());
       }
 
-      const data = await response.json();
+      const data = await safeParseJSON(response);
       
       // Transform backend data to match frontend expectations
       const transformedJobs = data.map(job => ({
@@ -72,13 +95,13 @@ export const TechnicianProvider = ({ children }) => {
         customerName: job.customer_name || job.customer?.name || 'Unknown Customer',
         customerPhone: job.customer?.phone || '',
         customerEmail: job.customer?.email || '',
-        vehicleInfo: `${job.vehicle_year || ''} ${job.vehicle_model || ''}`.trim(),
+        vehicleInfo: `${job.vehicle_year || ''} ${job.vehicle_model || ''}`.trim() || 'Vehicle Info Not Available',
         vehicleYear: job.vehicle_year?.toString() || '',
         vehicleVin: job.vehicle_vin || '',
         licensePlate: job.vehicle_plate || '',
         mileage: job.mileage || '',
         vehicleImage: job.vehicle_photos?.[0] || null,
-        serviceDescription: job.service_description || '',
+        serviceDescription: job.service_description || job.description || '',
         services: job.services || [],
         status: transformStatus(job.status),
         priority: job.priority || 'Medium',
@@ -91,8 +114,9 @@ export const TechnicianProvider = ({ children }) => {
         actualCost: job.actual_cost,
         startedAt: job.started_at,
         completedAt: job.completed_at,
-        progressUpdates: job.progress_updates || [],
-        partsRequests: job.parts_requests || [],
+  progressUpdates: job.progress_updates || [],
+  partsUsed: job.parts || job.parts_used || [], // unified alias
+  partsRequests: job.parts_requests || [],
         messages: job.messages || []
       }));
 
@@ -153,11 +177,15 @@ export const TechnicianProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to update job status: ${response.statusText}`);
+        try {
+          const errorData = await safeParseJSON(response);
+          throw new Error(errorData.message || `Failed to update job status: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(e.message || `Failed to update job status: ${response.statusText}`);
+        }
       }
 
-      const updatedJob = await response.json();
+      const updatedJob = await safeParseJSON(response);
       
       // Transform the updated job
       const transformedJob = {
@@ -253,11 +281,15 @@ export const TechnicianProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to update progress: ${response.statusText}`);
+        try {
+          const errorData = await safeParseJSON(response);
+          throw new Error(errorData.message || `Failed to update progress: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(e.message || `Failed to update progress: ${response.statusText}`);
+        }
       }
 
-      const progressUpdate = await response.json();
+      const progressUpdate = await safeParseJSON(response);
       addNotification(`Progress updated for job ${jobId}`, 'success');
       return progressUpdate;
     } catch (err) {
@@ -268,22 +300,63 @@ export const TechnicianProvider = ({ children }) => {
   };
 
   // Request parts for a job
-  const requestParts = async (jobId, partsData) => {
+  const requestParts = async (jobId, selectedParts, notes = '') => {
     try {
-      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/request-parts/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(partsData),
-      });
+      // If selectedParts is an array of parts (from PartsRequest component), 
+      // we need to create separate requests for each part
+      if (Array.isArray(selectedParts)) {
+        const results = [];
+        
+        for (const part of selectedParts) {
+          const partRequestData = {
+            part_number: part.partNumber,
+            part_name: part.name,
+            quantity_requested: part.quantity,
+            reason: notes || `Parts needed for job ${jobId}: ${part.name} (${part.quantity} units)`
+          };
+          
+          const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/request-parts/`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(partRequestData),
+          });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to request parts: ${response.statusText}`);
+          if (!response.ok) {
+            try {
+              const errorData = await safeParseJSON(response);
+              throw new Error(errorData.message || `Failed to request part ${part.name}: ${response.statusText}`);
+            } catch (e) {
+              throw new Error(e.message || `Failed to request part ${part.name}: ${response.statusText}`);
+            }
+          }
+
+          const partsRequest = await safeParseJSON(response);
+          results.push(partsRequest);
+        }
+        
+        addNotification(`${selectedParts.length} parts requested for job ${jobId}`, 'success');
+        return results;
+      } else {
+        // Handle single part request (legacy format)
+        const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/request-parts/`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(selectedParts),
+        });
+
+        if (!response.ok) {
+          try {
+            const errorData = await safeParseJSON(response);
+            throw new Error(errorData.message || `Failed to request parts: ${response.statusText}`);
+          } catch (e) {
+            throw new Error(e.message || `Failed to request parts: ${response.statusText}`);
+          }
+        }
+
+        const partsRequest = await safeParseJSON(response);
+        addNotification(`Parts requested for job ${jobId}`, 'success');
+        return partsRequest;
       }
-
-      const partsRequest = await response.json();
-      addNotification(`Parts requested for job ${jobId}`, 'success');
-      return partsRequest;
     } catch (err) {
       setError(err.message);
       addNotification(`Failed to request parts: ${err.message}`, 'error');
@@ -298,22 +371,65 @@ export const TechnicianProvider = ({ children }) => {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          recipient_id: recipientId,
+          // allow backend auto-pick if null/undefined
+          recipient_id: recipientId || undefined,
           message
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to send message: ${response.statusText}`);
+        try {
+          const errorData = await safeParseJSON(response);
+          throw new Error(errorData.message || `Failed to send message: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(e.message || `Failed to send message: ${response.statusText}`);
+        }
       }
 
-      const sentMessage = await response.json();
+      const sentMessage = await safeParseJSON(response);
       addNotification(`Message sent about job ${jobId}`, 'success');
+      // Broadcast globally so dashboards can refresh immediately
+      try {
+        window.dispatchEvent(new CustomEvent('technician-message-sent', { detail: sentMessage }));
+      } catch (_) { /* noop for SSR */ }
       return sentMessage;
     } catch (err) {
       setError(err.message);
       addNotification(`Failed to send message: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
+  // Send alert to admin about job status
+  const sendAlert = async (jobId, alertData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/send-alert/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          alert_type: alertData.type,
+          message: alertData.message,
+          job_number: alertData.jobNumber,
+          customer_name: alertData.customerName,
+          vehicle_info: alertData.vehicleInfo
+        }),
+      });
+
+      if (!response.ok) {
+        try {
+          const errorData = await safeParseJSON(response);
+          throw new Error(errorData.message || `Failed to send alert: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(e.message || `Failed to send alert: ${response.statusText}`);
+        }
+      }
+
+      const sentAlert = await safeParseJSON(response);
+      addNotification(`Alert sent to admin about job ${jobId}`, 'success');
+      return sentAlert;
+    } catch (err) {
+      setError(err.message);
+      addNotification(`Failed to send alert: ${err.message}`, 'error');
       throw err;
     }
   };
@@ -327,19 +443,33 @@ export const TechnicianProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch messages: ${response.statusText}`);
+        let detail = '';
+        try {
+          const text = await response.text();
+          detail = text.slice(0,100).replace(/\s+/g,' ');
+        } catch { /* ignore */ }
+        throw new Error(`Failed to fetch messages (${response.status}): ${response.statusText} ${detail}`.trim());
       }
 
-      return await response.json();
+      return await safeParseJSON(response);
     } catch (err) {
       console.error('Error fetching messages:', err);
       return [];
     }
   };
 
-  // Initialize data on mount
+  // Initialize data on mount and set up periodic refresh
   useEffect(() => {
     fetchTechnicianJobs();
+    
+    // Set up periodic refresh every 30 seconds instead of frequent polling
+    const refreshInterval = setInterval(() => {
+      fetchTechnicianJobs();
+    }, 30000); // 30 seconds
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
   }, []);
 
   const value = {
@@ -362,6 +492,7 @@ export const TechnicianProvider = ({ children }) => {
     // Communication
     requestParts,
     sendMessage,
+    sendAlert,
     fetchMessages,
 
     // Utility

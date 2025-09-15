@@ -120,7 +120,7 @@ Both accounts will require OTP verification sent to: murambaprogress@gmail.com
 ## Testing the Deployment
 
 ### 1. Backend API Test
-Visit: `https://progress.pythonanywhere.com/api/auth/login`
+Visit: `https://progress.pythonanywhere.com/api/login`
 
 ### 2. Login Flow Test
 1. Try logging in with admin/supervisor credentials

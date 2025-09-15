@@ -18,6 +18,7 @@ from .models import (
 )
 from inventory.models import Customer
 from api.models import User
+from inventory.models import Part, InventoryTransaction
 
 
 @api_view(['GET', 'POST'])
@@ -35,7 +36,7 @@ def jobs_list(request):
         search = request.GET.get('search')
         
         # Start with all jobs
-        queryset = Job.objects.all().select_related('customer', 'technician')
+        queryset = Job.objects.all().select_related('customer', 'assigned_technician')
         
         # Apply filters
         if status_filter:
@@ -43,7 +44,7 @@ def jobs_list(request):
         if priority_filter:
             queryset = queryset.filter(priority=priority_filter)
         if technician_filter:
-            queryset = queryset.filter(technician_id=technician_filter)
+            queryset = queryset.filter(assigned_technician_id=technician_filter)
         if customer_filter:
             queryset = queryset.filter(customer_id=customer_filter)
         if search:
@@ -78,7 +79,7 @@ def jobs_list(request):
 def job_detail(request, pk):
     """Retrieve, update or delete a job"""
     try:
-        job = Job.objects.select_related('customer', 'technician').prefetch_related(
+        job = Job.objects.select_related('customer', 'assigned_technician').prefetch_related(
             'parts_used', 'status_history'
         ).get(pk=pk)
     except Job.DoesNotExist:
@@ -181,7 +182,7 @@ def customer_jobs(request, customer_id):
 def technician_jobs(request, technician_id):
     """Get all jobs assigned to a specific technician"""
     try:
-        jobs = Job.objects.filter(technician_id=technician_id).order_by('-created_at')
+        jobs = Job.objects.filter(assigned_technician_id=technician_id).order_by('-created_at')
         serializer = JobListSerializer(jobs, many=True)
         return Response(serializer.data)
     except Exception as e:
@@ -272,14 +273,121 @@ def update_job_status(request, job_id):
         return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def technician_update_job_status(request, job_id):
+    """Allow technicians to update job status for their assigned jobs"""
+    try:
+        # Get the job and verify it's assigned to the requesting technician
+        job = Job.objects.get(pk=job_id)
+        
+        # Check if the user is the assigned technician or has admin privileges
+        if job.assigned_technician != request.user and not request.user.is_staff:
+            return Response(
+                {'message': 'You can only update status for jobs assigned to you'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+    except Job.DoesNotExist:
+        return Response({'message': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    new_status = request.data.get('status')
+    notes = request.data.get('notes', '')
+    
+    if not new_status:
+        return Response({'message': 'Status is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate status choices for technicians
+    allowed_statuses = ['in_progress', 'completed', 'ready_to_collect', 'on_hold', 'pending']
+    if new_status not in allowed_statuses:
+        return Response(
+            {'message': f'Invalid status. Allowed statuses: {", ".join(allowed_statuses)}'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        old_status = job.status
+        job.status = new_status
+        
+        # Update timestamps based on status
+        if new_status == 'in_progress' and not job.started_at:
+            job.started_at = timezone.now()
+        elif new_status in ['completed', 'ready_to_collect'] and not job.completed_at:
+            job.completed_at = timezone.now()
+        
+        job.save()
+        
+        # Create status history entry
+        JobStatusHistory.objects.create(
+            job=job,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by=request.user,
+            notes=notes
+        )
+        
+        return Response({
+            'message': 'Job status updated successfully',
+            'job': JobSerializer(job, context={'request': request}).data
+        })
+    except Exception as e:
+        return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def unassigned_jobs(request):
+    """Get list of unassigned jobs"""
+    try:
+        # Get query parameters for filtering
+        status_filter = request.GET.get('status')
+        priority_filter = request.GET.get('priority')
+        search = request.GET.get('search')
+        
+        # Start with unassigned jobs only
+        queryset = Job.objects.filter(assigned_technician__isnull=True).select_related('customer')
+        
+        # Apply filters
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if priority_filter:
+            queryset = queryset.filter(priority=priority_filter)
+        if search:
+            queryset = queryset.filter(
+                Q(customer_name__icontains=search) |
+                Q(vehicle_model__icontains=search) |
+                Q(vehicle_plate__icontains=search) |
+                Q(service_description__icontains=search)
+            )
+        
+        # Order by priority and creation date
+        queryset = queryset.order_by('-priority', '-created_at')
+        
+        # Use list serializer for performance
+        serializer = JobListSerializer(queryset, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response(
+            {'message': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def available_technicians(request):
     """Get list of available technicians"""
     try:
-        # Get all users who could be technicians (you might want to filter by role)
-        technicians = User.objects.filter(is_active=True).values('id', 'username', 'email')
+        # Get all users with technician role or all users if no technicians exist
+        technicians = User.objects.filter(is_active=True, role='technician').values('id', 'username', 'email')
+        
+        # If no technicians found, include supervisors and admins as fallback
+        if not technicians.exists():
+            technicians = User.objects.filter(is_active=True).values('id', 'username', 'email')
+        
         return Response(list(technicians))
     except Exception as e:
         return Response(
@@ -401,7 +509,7 @@ def technician_dashboard(request):
     
     try:
         # Get jobs assigned to this technician
-        jobs = Job.objects.filter(technician=request.user).prefetch_related(
+        jobs = Job.objects.filter(assigned_technician=request.user).prefetch_related(
             'progress_updates', 'parts_requests', 'messages'
         ).order_by('-created_at')
         
@@ -428,7 +536,7 @@ def reassign_job(request, job_id):
             return Response({'message': 'New technician ID is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         new_technician = User.objects.get(pk=new_technician_id, role='technician')
-        old_technician = job.technician
+        old_technician = job.assigned_technician
         
         # Create reassignment record
         JobReassignment.objects.create(
@@ -440,7 +548,7 @@ def reassign_job(request, job_id):
         )
         
         # Update job
-        job.technician = new_technician
+        job.assigned_technician = new_technician
         job.save()
         
         # Create status history entry
@@ -471,7 +579,7 @@ def update_job_progress(request, job_id):
         job = Job.objects.get(pk=job_id)
         
         # Only assigned technician can update progress
-        if job.technician != request.user:
+        if job.assigned_technician != request.user:
             return Response({'message': 'You can only update progress for jobs assigned to you'}, status=status.HTTP_403_FORBIDDEN)
         
         data = request.data.copy()
@@ -499,7 +607,7 @@ def request_parts(request, job_id):
         job = Job.objects.get(pk=job_id)
         
         # Only assigned technician can request parts
-        if job.technician != request.user:
+        if job.assigned_technician != request.user:
             return Response({'message': 'You can only request parts for jobs assigned to you'}, status=status.HTTP_403_FORBIDDEN)
         
         data = request.data.copy()
@@ -527,34 +635,109 @@ def send_message(request, job_id):
         job = Job.objects.get(pk=job_id)
         recipient_id = request.data.get('recipient_id')
         message = request.data.get('message')
-        
-        if not recipient_id or not message:
-            return Response({'message': 'Recipient and message are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        recipient = User.objects.get(pk=recipient_id)
-        
-        # Create message
+        print(f"[send_message] user={getattr(request.user, 'id', None)} job={job_id} recipient_id={recipient_id} message_len={len(message) if message else 0}")
+
+        if not message:
+            return Response({'message': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Auto-pick a supervisor/admin if recipient not specified
+        if not recipient_id:
+            recipient = User.objects.filter(role__in=['supervisor', 'admin']).order_by('id').first()
+            if not recipient:
+                return Response({'message': 'No supervisor/admin available to receive message'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            recipient = User.objects.get(pk=recipient_id)
+
         tech_message = TechnicianMessage.objects.create(
             job=job,
             sender=request.user,
             recipient=recipient,
             message=message
         )
-        
-        return Response(TechnicianMessageSerializer(tech_message).data, status=status.HTTP_201_CREATED)
-        
+
+        serialized = TechnicianMessageSerializer(tech_message).data
+        print(f"[send_message] created message id={serialized.get('id')} to recipient={serialized.get('recipient')} from sender={serialized.get('sender')}")
+        return Response(serialized, status=status.HTTP_201_CREATED)
     except Job.DoesNotExist:
         return Response({'message': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
     except User.DoesNotExist:
         return Response({'message': 'Recipient not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        print(f"[send_message][error] {e}")
         return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
-def get_messages(request):
+def job_messages(request, job_id):
+    """Get all messages for a specific job (participants only or staff)."""
+    try:
+        job = Job.objects.get(pk=job_id)
+        # Basic permission: allow if user is staff (admin/supervisor) or assigned technician or participant in any message
+        if request.user.role not in ['admin', 'supervisor'] and job.assigned_technician != request.user:
+            # Fallback: check participation
+            is_participant = TechnicianMessage.objects.filter(job=job, sender=request.user).exists() or \
+                TechnicianMessage.objects.filter(job=job, recipient=request.user).exists()
+            if not is_participant:
+                return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        msgs = TechnicianMessage.objects.filter(job=job).order_by('sent_at')
+        return Response(TechnicianMessageSerializer(msgs, many=True).data)
+    except Job.DoesNotExist:
+        return Response({'message': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def mark_job_messages_read(request, job_id):
+    """Mark messages for a job as read for the requesting user (staff/admin)."""
+    try:
+        job = Job.objects.get(pk=job_id)
+        # Only staff can mark en masse; technicians may mark their own messages read via other flows
+        if request.user.role not in ['admin', 'supervisor'] and job.assigned_technician != request.user:
+            return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Mark messages where recipient is the requesting user or all technician->staff messages
+        updated = TechnicianMessage.objects.filter(job=job, recipient=request.user, is_read=False).update(is_read=True)
+        # Also mark messages sent by technicians to any staff as read if this user is staff
+        if request.user.role in ['admin', 'supervisor']:
+            # Mark technician->staff messages (if recipient is this staff) already handled; leave others untouched
+            pass
+
+        return Response({'updated': updated})
+    except Job.DoesNotExist:
+        return Response({'message': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'POST'])
+# @authentication_classes([JWTAuthentication])
+# @permission_classes([IsAuthenticated])
+def messages_handler(request):
+    """Handle messages - GET for retrieving, POST for sending"""
+    print(f"Messages handler called with method: {request.method}")
+    print(f"User authenticated: {hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False)}")
+    
+    if request.method == 'GET':
+        # Return empty list for testing
+        return Response([], status=status.HTTP_200_OK)
+    elif request.method == 'POST':
+        # Mock response for testing
+        return Response({
+            'id': 1,
+            'message': request.data.get('message', 'Test message'),
+            'sender': {'username': 'test_user'},
+            'recipient': {'username': 'admin'},
+            'sent_at': '2025-09-11T22:45:00Z'
+        }, status=status.HTTP_201_CREATED)
+
+
+def get_messages_list(request):
     """Get messages for current user"""
     try:
         messages = TechnicianMessage.objects.filter(
@@ -562,6 +745,88 @@ def get_messages(request):
         ).order_by('-sent_at')
         
         serializer = TechnicianMessageSerializer(messages, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def get_recent_messages(request):
+    """Get recent messages for current user (last 20)"""
+    try:
+        # For admins/supervisors, show messages from technicians primarily
+        if request.user.role in ['admin', 'supervisor']:
+            # Build full queryset first (no slicing) so we can compute counts safely
+            full_qs = TechnicianMessage.objects.filter(
+                Q(sender__role='technician') | Q(recipient=request.user) | Q(sender=request.user)
+            ).select_related('sender', 'recipient', 'job').order_by('-sent_at')
+            tech_count = full_qs.filter(sender__role='technician').count()
+            messages = full_qs[:40]
+        else:
+            # For technicians, show their sent/received messages
+            full_qs = TechnicianMessage.objects.filter(
+                Q(sender=request.user) | Q(recipient=request.user)
+            ).select_related('sender', 'recipient', 'job').order_by('-sent_at')
+            tech_count = full_qs.filter(sender__role='technician').count()
+            messages = full_qs[:20]
+
+        serializer = TechnicianMessageSerializer(messages, many=True)
+        # messages is a sliced queryset or list-like; use tech_count computed above
+        print(f"[get_recent_messages] user={getattr(request.user, 'username', None)} role={getattr(request.user, 'role', None)} returned {len(serializer.data)} messages ({tech_count} from technicians)")
+        return Response(serializer.data)
+    except Exception as e:
+        print(f"[get_recent_messages][error] {e}")
+        return Response({'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+# @authentication_classes([JWTAuthentication])
+# @permission_classes([IsAuthenticated])
+def send_general_message(request):
+    """Send a general message (not tied to a specific job)"""
+    print(f"Send message called with data: {request.data}")
+    
+    try:
+        job_id = request.data.get('job')
+        message = request.data.get('message')
+        recipient_type = request.data.get('recipient_type', 'supervisor')
+        
+        if not message:
+            return Response({'message': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mock response for testing
+        return Response({
+            'id': 1,
+            'message': message,
+            'sender': {'username': 'test_user', 'id': 1},
+            'recipient': {'username': 'admin', 'id': 2},
+            'job': job_id,
+            'sent_at': '2025-09-11T22:45:00Z'
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        print(f"Error in send_general_message: {e}")
+        return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def get_parts_requests(request):
+    """Get parts requests for current user"""
+    try:
+        if request.user.role == 'technician':
+            # Technicians see their own parts requests
+            parts_requests = PartsRequest.objects.filter(
+                technician=request.user
+            ).order_by('-requested_at')
+        else:
+            # Admins and supervisors see all parts requests
+            parts_requests = PartsRequest.objects.all().order_by('-requested_at')
+        
+        serializer = PartsRequestSerializer(parts_requests, many=True)
         return Response(serializer.data)
     except Exception as e:
         return Response({'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -642,3 +907,86 @@ def unassign_job(request, job_id):
         return Response({'message': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def approve_parts_request(request, request_id):
+    """Approve or reject a parts request"""
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        parts_request = PartsRequest.objects.get(pk=request_id)
+        action = request.data.get('action')  # 'approve' or 'reject'
+        
+        if action not in ['approve', 'reject']:
+            return Response({'message': 'Invalid action. Must be "approve" or "reject"'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if action == 'approve':
+            # Check if part exists in inventory
+            try:
+                part = Part.objects.get(part_number=parts_request.part_number)
+                
+                # Check if sufficient stock is available
+                if part.current_stock < parts_request.quantity_requested:
+                    return Response({
+                        'message': f'Insufficient stock. Available: {part.current_stock}, Requested: {parts_request.quantity_requested}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Deduct from inventory
+                part.current_stock -= parts_request.quantity_requested
+                part.save()
+                
+                # Create inventory transaction
+                InventoryTransaction.objects.create(
+                    part=part,
+                    type='stock-out',
+                    quantity=parts_request.quantity_requested,
+                    value=part.unit_cost * parts_request.quantity_requested,
+                    notes=f'Parts used for Job #{parts_request.job.id}',
+                    related_job_id=str(parts_request.job.id)
+                )
+                
+                # Update parts request status
+                parts_request.status = 'approved'
+                parts_request.approved_by = request.user
+                parts_request.approved_at = timezone.now()
+                parts_request.save()
+                
+                # Add part to job parts
+                JobPart.objects.create(
+                    job=parts_request.job,
+                    part_number=parts_request.part_number,
+                    part_name=parts_request.part_name,
+                    quantity_used=parts_request.quantity_requested,
+                    unit_cost=part.unit_cost,
+                    total_cost=part.unit_cost * parts_request.quantity_requested
+                )
+                
+                return Response({
+                    'message': 'Parts request approved and inventory updated',
+                    'parts_request': PartsRequestSerializer(parts_request).data
+                })
+                
+            except Part.DoesNotExist:
+                return Response({
+                    'message': f'Part {parts_request.part_number} not found in inventory'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        elif action == 'reject':
+            parts_request.status = 'rejected'
+            parts_request.approved_by = request.user
+            parts_request.approved_at = timezone.now()
+            parts_request.save()
+            
+            return Response({
+                'message': 'Parts request rejected',
+                'parts_request': PartsRequestSerializer(parts_request).data
+            })
+            
+    except PartsRequest.DoesNotExist:
+        return Response({'message': 'Parts request not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

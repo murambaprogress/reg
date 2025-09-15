@@ -1,53 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const ActiveJobTimer = ({ job, onPause, onResume, onComplete, onUpdateProgress }) => {
+const ActiveJobTimer = React.memo(({ job, onPause, onResume, onComplete, onUpdateProgress }) => {
   const [elapsedTime, setElapsedTime] = useState(job.elapsedTime || 0);
-  const [isRunning, setIsRunning] = useState(job.status === 'In Progress');
   const [notes, setNotes] = useState('');
-  const [progressStatus, setProgressStatus] = useState('In Progress');
+
+  // Normalize status to the canonical machine format used by the API (snake_case)
+  const canonicalStatus = (s) => String(s || '').toLowerCase().replace(/\s+/g, '_');
+  const initialStatus = canonicalStatus(job.status) || 'in_progress';
+  const [isRunning, setIsRunning] = useState(initialStatus === 'in_progress');
+  const [progressStatus, setProgressStatus] = useState(initialStatus);
+  const intervalRef = useRef(null);
 
   useEffect(() => {
-    let interval;
     if (isRunning) {
-      interval = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
+      // Update every 5 seconds instead of every second to reduce flashing
+      intervalRef.current = setInterval(() => {
+        setElapsedTime(prev => prev + 5);
+      }, 5000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
-    return () => clearInterval(interval);
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, [isRunning]);
 
-  const formatTime = (seconds) => {
+  const formatTime = useCallback((seconds) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, []);
 
-  const handlePause = () => {
+  const handlePause = useCallback(() => {
     setIsRunning(false);
     onPause(job.id, elapsedTime);
-  };
+  }, [job.id, elapsedTime, onPause]);
 
-  const handleResume = () => {
+  const handleResume = useCallback(() => {
     setIsRunning(true);
     onResume(job.id);
-  };
+  }, [job.id, onResume]);
 
-  const handleUpdateProgress = () => {
+  const handleUpdateProgress = useCallback(() => {
     onUpdateProgress(job.id, progressStatus, notes);
     setNotes('');
-  };
+  }, [job.id, progressStatus, notes, onUpdateProgress]);
 
-  const progressOptions = [
-    'In Progress',
-    'Waiting for Parts',
-    'Customer Approval Required',
-    'Quality Check',
-    'Ready for Pickup',
-    'Completed'
-  ];
+  // Only allow the canonical statuses (machine values) in the dropdown
+  const progressOptions = useMemo(() => [
+    { value: 'pending', label: 'Pending' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'on_hold', label: 'On Hold' },
+    { value: 'ready_to_collect', label: 'Ready to Collect' },
+    { value: 'completed', label: 'Completed' }
+  ], []);
+
+  // Memoize the formatted time to prevent unnecessary re-renders
+  const formattedTime = useMemo(() => formatTime(elapsedTime), [elapsedTime, formatTime]);
 
   return (
     <div className="bg-surface rounded-lg border border-border p-6 shadow-card mb-6">
@@ -66,7 +84,7 @@ const ActiveJobTimer = ({ job, onPause, onResume, onComplete, onUpdateProgress }
         <div>
           <div className="text-center mb-4">
             <div className="text-3xl font-data-normal text-text-primary mb-2">
-              {formatTime(elapsedTime)}
+              {formattedTime}
             </div>
             <p className="text-sm text-text-secondary">Elapsed Time</p>
           </div>
@@ -115,7 +133,7 @@ const ActiveJobTimer = ({ job, onPause, onResume, onComplete, onUpdateProgress }
                 className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 {progressOptions.map(option => (
-                  <option key={option} value={option}>{option}</option>
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </div>
@@ -131,20 +149,33 @@ const ActiveJobTimer = ({ job, onPause, onResume, onComplete, onUpdateProgress }
                 className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent resize-none"
               />
             </div>
-            <Button
-              variant="primary"
-              onClick={handleUpdateProgress}
-              fullWidth
-              className="text-sm"
-            >
-              <Icon name="Save" size={16} className="mr-2" />
-              Update Progress
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                variant="primary"
+                onClick={handleUpdateProgress}
+                className="text-sm flex-1"
+              >
+                <Icon name="Save" size={16} className="mr-2" />
+                Update Progress
+              </Button>
+              {progressStatus === 'completed' && (
+                <Button
+                  variant="success"
+                  onClick={() => onComplete(job.id)}
+                  className="text-sm"
+                >
+                  <Icon name="CheckCircle" size={16} className="mr-2" />
+                  Complete Job
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
+});
+
+ActiveJobTimer.displayName = 'ActiveJobTimer';
 
 export default ActiveJobTimer;

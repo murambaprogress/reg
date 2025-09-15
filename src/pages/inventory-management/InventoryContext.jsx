@@ -251,21 +251,27 @@ export const InventoryProvider = ({ children }) => {
     const counts = {};
     parts.forEach(part => {
       const category = part.category;
-      const categoryId = category && typeof category === 'object' 
-        ? (category.id ?? category) 
+      const categoryId = category && typeof category === 'object'
+        ? (category.id ?? category)
         : category;
-      
       if (categoryId) {
         counts[categoryId] = (counts[categoryId] || 0) + 1;
       }
     });
 
-    const updatedCategories = categories.map(category => ({
-      ...category,
-      count: counts[category.id] || 0
-    }));
+    let changed = false;
+    const updatedCategories = categories.map(category => {
+      const newCount = counts[category.id] || 0;
+      if (category.count !== newCount) {
+        changed = true;
+        return { ...category, count: newCount };
+      }
+      return category; // preserve reference if unchanged
+    });
 
-    setCategories(updatedCategories);
+    if (changed) {
+      setCategories(updatedCategories);
+    }
   }, [categories, parts]);
 
   // Effects
@@ -386,7 +392,7 @@ export const InventoryProvider = ({ children }) => {
 
   const assignPart = useCallback(async ({ partId, jobId, quantity, notes }) => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/assign-to-job`, {
+      const data = await apiCall(`${API_BASE}/inventory/assign-to-job/`, {
         method: 'POST',
         body: JSON.stringify({ partId, jobId, quantity, notes })
       });

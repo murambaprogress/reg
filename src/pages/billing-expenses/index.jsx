@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import Debtors from './components/debtors';
 import Header from '../../components/ui/Header';
 import Breadcrumb from '../../components/ui/Breadcrumb';
@@ -10,14 +10,26 @@ import BillingTable from './components/BillingTable';
 import PersonalExpensesModal from './components/PersonalExpensesModal';
 import { useUser } from '../../components/UserContext';
 import ExpenseStatsCard from './components/ExpenseStatsCard';
+import { BillingProvider, useBilling } from './BillingContext';
 
-const BillingExpenses = () => {
+const BillingExpensesContent = () => {
   const [activeTab, setActiveTab] = useState('billing');
   const [isPersonalExpenseModalOpen, setIsPersonalExpenseModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('this-month');
 
   const { user } = useUser();
+  const { 
+    stats, 
+    fetchBillingStats, 
+    fetchExpenseStats, 
+    fetchInvoices, 
+    fetchExpenses, 
+    fetchDebtors,
+    loading,
+    error 
+  } = useBilling();
+  
   const showPersonal = user?.permissions?.show_personal_expenses;
 
   const tabs = [
@@ -27,26 +39,37 @@ const BillingExpenses = () => {
   if (showPersonal) tabs.push({ id: 'personal', label: 'Personal Expenses', icon: 'User' });
   tabs.push({ id: 'debtors', label: 'Debtors', icon: 'AlertCircle' });
 
-  const statsData = {
-    billing: [
-      { title: 'Total Revenue', value: '$28,450', change: '+15%', changeType: 'increase', icon: 'DollarSign', color: 'success' },
-      { title: 'Outstanding Invoices', value: '$4,200', change: '-8%', changeType: 'decrease', icon: 'Clock', color: 'warning' },
-      { title: 'Paid This Month', value: '$24,250', change: '+22%', changeType: 'increase', icon: 'CheckCircle', color: 'success' },
-      { title: 'Avg. Invoice Value', value: '$285', change: '+5%', changeType: 'increase', icon: 'TrendingUp', color: 'accent' },
-    ],
-    expenses: [
-      { title: 'Total Expenses', value: '$12,450', change: '+8%', changeType: 'increase', icon: 'TrendingDown', color: 'error' },
-      { title: 'Parts & Supplies', value: '$8,200', change: '+12%', changeType: 'increase', icon: 'Package', color: 'warning' },
-      { title: 'Utilities', value: '$1,850', change: '+3%', changeType: 'increase', icon: 'Zap', color: 'accent' },
-      { title: 'Equipment', value: '$2,400', change: '-5%', changeType: 'decrease', icon: 'Wrench', color: 'secondary' },
-    ],
-    personal: [
-      { title: 'Admin Expenses', value: '$1,250', change: '+5%', changeType: 'increase', icon: 'User', color: 'primary' },
-      { title: 'Travel & Meals', value: '$650', change: '+18%', changeType: 'increase', icon: 'Car', color: 'warning' },
-      { title: 'Office Supplies', value: '$300', change: '-2%', changeType: 'decrease', icon: 'FileText', color: 'accent' },
-      { title: 'Professional Dev', value: '$300', change: '+10%', changeType: 'increase', icon: 'BookOpen', color: 'success' },
-    ],
-  };
+  // Load data when component mounts or tab changes
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        if (activeTab === 'billing') {
+          await fetchBillingStats();
+          await fetchInvoices({ search: searchTerm, date_range: dateRange });
+        } else if (activeTab === 'expenses') {
+          await fetchExpenseStats('business');
+          await fetchExpenses({ 
+            search: searchTerm, 
+            date_range: dateRange, 
+            expense_type: 'business' 
+          });
+        } else if (activeTab === 'personal') {
+          await fetchExpenseStats('personal');
+          await fetchExpenses({ 
+            search: searchTerm, 
+            date_range: dateRange, 
+            expense_type: 'personal' 
+          });
+        } else if (activeTab === 'debtors') {
+          await fetchDebtors({ search: searchTerm });
+        }
+      } catch (err) {
+        console.error('Error loading data:', err);
+      }
+    };
+
+    loadData();
+  }, [activeTab, searchTerm, dateRange]);
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
@@ -59,7 +82,15 @@ const BillingExpenses = () => {
       case 'expenses':
         return <ExpensesTable searchTerm={searchTerm} dateRange={dateRange} />;
       case 'personal':
-        return <ExpensesTable searchTerm={searchTerm} dateRange={dateRange} isPersonal={true} />;
+        return (
+          <div className="flex items-center justify-center min-h-[400px] bg-surface rounded-lg border border-border">
+            <div className="text-center">
+              <Icon name="Clock" size={48} className="text-text-secondary mx-auto mb-4" />
+              <h3 className="text-xl font-heading-semibold text-text-primary mb-2">Coming Soon</h3>
+              <p className="text-text-secondary">The Personal Expenses feature is currently under development.</p>
+            </div>
+          </div>
+        );
       case 'debtors':
         return <Debtors />;
       default:
@@ -129,19 +160,66 @@ const BillingExpenses = () => {
               </div>
             </div>
 
+            {/* Error Display */}
+            {error && (
+              <div className="mb-6">
+                <div className="modern-card p-4 bg-red-50 border-red-200">
+                  <div className="flex items-center">
+                    <Icon name="AlertCircle" size={20} className="text-red-500 mr-3" />
+                    <div>
+                      <h3 className="text-red-800 font-semibold">Something went wrong</h3>
+                      <p className="text-red-600 text-sm mt-1">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {statsData[activeTab]?.map((stat, index) => (
-                <ExpenseStatsCard
-                  key={index}
-                  title={stat.title}
-                  value={stat.value}
-                  change={stat.change}
-                  changeType={stat.changeType}
-                  icon={stat.icon}
-                  color={stat.color}
-                />
-              ))}
+              {loading ? (
+                // Loading skeleton
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="modern-card p-6 animate-pulse">
+                    <div className="h-4 bg-border rounded mb-2"></div>
+                    <div className="h-8 bg-border rounded mb-2"></div>
+                    <div className="h-3 bg-border rounded w-1/2"></div>
+                  </div>
+                ))
+              ) : error ? (
+                // Error state - show empty cards
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="modern-card p-6">
+                    <div className="text-center text-text-secondary">
+                      <Icon name="AlertCircle" size={24} className="mx-auto mb-2" />
+                      <p className="text-sm">Unable to load data</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                (() => {
+                  let currentStats = [];
+                  if (activeTab === 'billing') {
+                    currentStats = stats.billing || [];
+                  } else if (activeTab === 'expenses') {
+                    currentStats = stats.expenses || [];
+                  } else if (activeTab === 'personal') {
+                    currentStats = stats.personal || [];
+                  }
+                  
+                  return currentStats.map((stat, index) => (
+                    <ExpenseStatsCard
+                      key={index}
+                      title={stat.title}
+                      value={stat.value}
+                      change={stat.change}
+                      changeType={stat.changeType}
+                      icon={stat.icon}
+                      color={stat.color}
+                    />
+                  ));
+                })()
+              )}
             </div>
 
             {/* Filters */}
@@ -197,6 +275,15 @@ const BillingExpenses = () => {
         />
       )}
     </div>
+  );
+};
+
+// Wrapper component with BillingProvider
+const BillingExpenses = () => {
+  return (
+    <BillingProvider>
+      <BillingExpensesContent />
+    </BillingProvider>
   );
 };
 

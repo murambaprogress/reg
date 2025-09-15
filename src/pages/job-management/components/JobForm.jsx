@@ -280,12 +280,21 @@ const JobForm = ({ job, onSave, onCancel, customers, technicians, isEditing = fa
             className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
           >
             <option value="">Select Technician</option>
-            {technicians.map(tech => (
-              <option key={tech.id} value={tech.id}>
-                {tech.username || tech.name} - {tech.email}
-              </option>
-            ))}
+            {technicians && technicians.length > 0 ? (
+              technicians.map(tech => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.username || tech.name} - {tech.email}
+                </option>
+              ))
+            ) : (
+              <option value="" disabled>No technicians available</option>
+            )}
           </select>
+          {technicians && technicians.length === 0 && (
+            <p className="text-xs text-text-secondary mt-1">
+              No technicians found. Please contact an administrator to add technicians.
+            </p>
+          )}
         </div>
 
         {/* Vehicle Photos */}

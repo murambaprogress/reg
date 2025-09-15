@@ -3,7 +3,7 @@ import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
 
-const JobDetails = ({ job, onEdit, onStatusUpdate, onAddNote }) => {
+const JobDetails = ({ job, onEdit, onStatusUpdate, onAddNote, onReassign }) => {
   const [newNote, setNewNote] = useState('');
   const [showAddNote, setShowAddNote] = useState(false);
 
@@ -201,15 +201,37 @@ const JobDetails = ({ job, onEdit, onStatusUpdate, onAddNote }) => {
 
         {/* Technician Assignment */}
         <div className="space-y-4">
-          <h3 className="text-lg font-heading-medium text-text-primary">Assigned Technician</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-heading-medium text-text-primary">Assigned Technician</h3>
+            {onReassign && technicianName !== 'Unassigned' && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => onReassign(job)}
+              >
+                <Icon name="UserCheck" size={16} className="mr-2" />
+                Reassign
+              </Button>
+            )}
+          </div>
           <div className="flex items-center space-x-4 bg-background rounded-lg p-4">
             <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
               <Icon name="User" size={20} color="white" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-body-medium text-text-primary">{technicianName}</p>
               <p className="text-sm text-text-secondary">{technicianSpecialization}</p>
             </div>
+            {technicianName === 'Unassigned' && onReassign && (
+              <Button 
+                variant="primary" 
+                size="sm"
+                onClick={() => onReassign(job)}
+              >
+                <Icon name="UserPlus" size={16} className="mr-2" />
+                Assign Technician
+              </Button>
+            )}
           </div>
         </div>
 

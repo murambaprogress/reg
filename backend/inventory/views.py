@@ -105,29 +105,30 @@ def parts(request):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def part_detail(request, pk):
     try:
         part = Part.objects.get(pk=pk)
     except Part.DoesNotExist:
-        return Response({'message': 'Part not found'}, status=404)
+        return Response({'message': 'Part not found'}, status=status.HTTP_404_NOT_FOUND)
+    
     if request.method == 'GET':
         return Response(PartSerializer(part).data)
-    # Update (admin)
-    auth = request.META.get('HTTP_AUTHORIZATION', '')
-    if not auth.startswith('Bearer '):
-        return Response({'message': 'Authorization required'}, status=401)
-    token = auth.split(' ')[1]
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        if payload.get('role') != 'admin':
-            return Response({'message': 'Forbidden'}, status=403)
-    except Exception as e:
-        return Response({'message': 'Invalid token', 'error': str(e)}, status=401)
+    
+    # Update/Delete (admin/supervisor only)
+    if not hasattr(request.user, 'role') or request.user.role not in ('admin', 'supervisor'):
+        return Response({'message': 'Only admin and supervisor can modify parts'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'DELETE':
+        part.delete()
+        return Response({'message': 'Part deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
     serializer = PartSerializer(part, data=request.data, partial=True)
     if serializer.is_valid():
         p = serializer.save()
         return Response(PartSerializer(p).data)
-    return Response(serializer.errors, status=400)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])
@@ -230,44 +231,7 @@ def export_parts_csv(request):
     return resp
 
 
-@api_view(['GET', 'POST'])
-def customers(request):
-    if request.method == 'GET':
-        qs = Customer.objects.all()
-        serializer = CustomerSerializer(qs, many=True)
-        return Response(serializer.data)
-    # POST - create customer (allow admin/supervisor)
-    payload, err = decode_jwt_from_request(request)
-    if err:
-        return Response(err, status=401)
-    if payload.get('role') not in ('admin', 'supervisor'):
-        return Response({'message': 'Forbidden'}, status=403)
-    serializer = CustomerSerializer(data=request.data)
-    if serializer.is_valid():
-        c = serializer.save()
-        return Response(CustomerSerializer(c).data, status=201)
-    return Response(serializer.errors, status=400)
-
-
-@api_view(['GET', 'PATCH', 'DELETE'])
-def customer_detail(request, pk):
-    try:
-        cust = Customer.objects.get(pk=pk)
-    except Customer.DoesNotExist:
-        return Response({'message': 'Customer not found'}, status=404)
-    if request.method == 'GET':
-        return Response(CustomerSerializer(cust).data)
-    # Update (admin/supervisor)
-    payload, err = decode_jwt_from_request(request)
-    if err:
-        return Response(err, status=401)
-    if payload.get('role') not in ('admin', 'supervisor'):
-        return Response({'message': 'Forbidden'}, status=403)
-    serializer = CustomerSerializer(cust, data=request.data, partial=True)
-    if serializer.is_valid():
-        c = serializer.save()
-        return Response(CustomerSerializer(c).data)
-    return Response(serializer.errors, status=400)
+# Customer views moved to customers app - these are duplicates and should be removed
 
 
 @api_view(['POST'])
@@ -283,19 +247,20 @@ def scan_barcode(request):
 
 
 @api_view(['GET', 'POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def suppliers(request):
     if request.method == 'GET':
         qs = Supplier.objects.all()
         serializer = SupplierSerializer(qs, many=True)
         return Response(serializer.data)
-    # POST (admin)
-    payload, err = decode_jwt_from_request(request)
-    if err:
-        return Response(err, status=401)
-    if payload.get('role') != 'admin':
-        return Response({'message': 'Forbidden'}, status=403)
+    
+    # POST - create supplier (admin/supervisor only)
+    if not hasattr(request.user, 'role') or request.user.role not in ('admin', 'supervisor'):
+        return Response({'message': 'Only admin and supervisor can create suppliers'}, status=status.HTTP_403_FORBIDDEN)
+    
     serializer = SupplierSerializer(data=request.data)
     if serializer.is_valid():
         s = serializer.save()
-        return Response(SupplierSerializer(s).data, status=201)
-    return Response(serializer.errors, status=400)
+        return Response(SupplierSerializer(s).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

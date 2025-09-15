@@ -30,6 +30,7 @@ const JobStats = ({ jobs }) => {
     const totalJobs = jobs.length;
     const pendingJobs = jobs.filter(job => job.status?.toLowerCase() === 'pending').length;
     const inProgressJobs = jobs.filter(job => job.status?.toLowerCase() === 'in_progress' || job.status === 'In Progress').length;
+    const readyToCollectJobs = jobs.filter(job => job.status?.toLowerCase() === 'ready_to_collect' || job.status === 'Ready to Collect').length;
     const completedJobs = jobs.filter(job => job.status?.toLowerCase() === 'completed').length;
     const highPriorityJobs = jobs.filter(job => job.priority === 'High').length;
 
@@ -38,6 +39,7 @@ const JobStats = ({ jobs }) => {
       status_breakdown: {
         pending: pendingJobs,
         in_progress: inProgressJobs,
+        ready_to_collect: readyToCollectJobs,
         completed: completedJobs
       },
       priority_breakdown: {
@@ -69,6 +71,13 @@ const JobStats = ({ jobs }) => {
       icon: 'Wrench',
       color: 'text-accent',
       bgColor: 'bg-accent/10'
+    },
+    {
+      label: 'Ready to Collect',
+      value: displayStats.status_breakdown?.ready_to_collect || 0,
+      icon: 'Car',
+      color: 'text-info',
+      bgColor: 'bg-info/10'
     },
     {
       label: 'Completed',

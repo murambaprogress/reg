@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Sale, SaleItem
-from inventory.models import Part, Customer
+from inventory.models import Part, Customer, Supplier
 
 
 class SaleItemSerializer(serializers.ModelSerializer):
@@ -14,14 +14,22 @@ class SaleSerializer(serializers.ModelSerializer):
     customer_id = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), source='customer', write_only=True, required=False, allow_null=True)
     customer = serializers.SerializerMethodField(read_only=True)
     customer_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    supplier_id = serializers.PrimaryKeyRelatedField(queryset=Supplier.objects.all(), source='supplier', write_only=True, required=False, allow_null=True)
+    supplier = serializers.SerializerMethodField(read_only=True)
+    supplier_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Sale
-        fields = ('id', 'date', 'customer_id', 'customer', 'customer_name', 'items', 'total')
+        fields = ('id', 'date', 'customer_id', 'customer', 'customer_name', 'supplier_id', 'supplier', 'supplier_name', 'items', 'total')
 
     def get_customer(self, obj):
         if obj.customer:
             return {'id': obj.customer.id, 'name': obj.customer.name}
+        return None
+
+    def get_supplier(self, obj):
+        if obj.supplier:
+            return {'id': obj.supplier.id, 'name': obj.supplier.name}
         return None
 
     def validate(self, data):
@@ -33,6 +41,15 @@ class SaleSerializer(serializers.ModelSerializer):
                 defaults={'phone': '', 'email': '', 'address': ''}
             )
             data['customer'] = customer
+
+        # Check if we need to create a new supplier
+        supplier_name = data.pop('supplier_name', None)
+        if not data.get('supplier') and supplier_name:
+            supplier, created = Supplier.objects.get_or_create(
+                name=supplier_name,
+                defaults={'contact': '', 'email': '', 'phone': '', 'products_supplied': ''}
+            )
+            data['supplier'] = supplier
 
         # Validate items and check inventory availability
         items = data.get('items', [])

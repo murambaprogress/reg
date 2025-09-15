@@ -9,6 +9,7 @@ import JobDetails from './components/JobDetails';
 import JobFilters from './components/JobFilters';
 import JobStats from './components/JobStats';
 import BulkActions from './components/BulkActions';
+import ReassignJobModal from './components/ReassignJobModal';
 import { useJob, JobProvider } from './JobContext';
 
 const JobManagementContent = () => {
@@ -23,6 +24,7 @@ const JobManagementContent = () => {
     updateJob,
     deleteJob,
     updateJobStatus,
+    reassignJob,
     bulkUpdateJobStatus,
     bulkDeleteJobs,
     setError
@@ -33,6 +35,8 @@ const JobManagementContent = () => {
   const [editingJob, setEditingJob] = useState(null);
   const [selectedJobs, setSelectedJobs] = useState([]);
   const [activeTab, setActiveTab] = useState('list'); // For mobile: 'list' or 'details'
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [jobToReassign, setJobToReassign] = useState(null);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -174,6 +178,31 @@ const JobManagementContent = () => {
     setPriorityFilter('');
     setTechnicianFilter('');
     setSortBy('newest');
+  };
+
+  const handleShowReassignModal = (job) => {
+    setJobToReassign(job);
+    setShowReassignModal(true);
+  };
+
+  const handleReassignJob = async (jobId, technicianId, reason) => {
+    try {
+      await reassignJob(jobId, technicianId, reason);
+      setShowReassignModal(false);
+      setJobToReassign(null);
+      
+      // Update selected job if it's the one being reassigned
+      if (selectedJob && selectedJob.id === jobId) {
+        // Refresh the job details
+        const updatedJob = jobs.find(job => job.id === jobId);
+        if (updatedJob) {
+          setSelectedJob(updatedJob);
+        }
+      }
+    } catch (err) {
+      console.error('Error reassigning job:', err);
+      // Error is already handled in the context
+    }
   };
 
   return (
@@ -331,6 +360,7 @@ const JobManagementContent = () => {
                   onEdit={handleEditJob}
                   onStatusUpdate={handleStatusUpdate}
                   onAddNote={handleAddNote}
+                  onReassign={handleShowReassignModal}
                 />
               ) : (
                 <div className="bg-surface rounded-lg border border-border p-12 text-center">
@@ -351,6 +381,19 @@ const JobManagementContent = () => {
           </div>
         </div>
       </main>
+
+      {/* Reassign Job Modal */}
+      {showReassignModal && jobToReassign && (
+        <ReassignJobModal
+          job={jobToReassign}
+          technicians={technicians}
+          onReassign={handleReassignJob}
+          onClose={() => {
+            setShowReassignModal(false);
+            setJobToReassign(null);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -38,7 +38,7 @@ export const UserProvider = ({ children }) => {
 
   // refresh user from backend if token exists
   useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api/auth';
+    const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
     
     const refresh = async () => {
       setLoading(true);
@@ -51,7 +51,7 @@ export const UserProvider = ({ children }) => {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/me`, {
+        const res = await fetch(`${API_BASE}/auth/me`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../../components/ui/Header';
 import { generateFinancialStatementPDF } from './components/generateFinancialStatementPDF';
 import { useSales } from '../sales-shop/SalesContext';
@@ -30,6 +30,14 @@ const ReportsAnalytics = () => {
   // Statement data should be provided from backend or context
   const { totalSales: totalSalesFromContext } = useSales();
   const totalSales = Number(totalSalesFromContext || 0);
+
+  // Report rows fetched from backend
+  const [reportRows, setReportRows] = useState([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+  // Server-side aggregates for faster charts
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [technicianMetrics, setTechnicianMetrics] = useState([]);
+  const [serviceTrends, setServiceTrends] = useState([]);
 
   // KPI metrics should be provided from backend or context
   const kpiMetrics = [
@@ -80,42 +88,102 @@ const ReportsAnalytics = () => {
     console.log('Refreshing data...');
     // Mock data refresh functionality
   window.__SHOW_TOAST && window.__SHOW_TOAST('Data refreshed successfully!', 'success');
+  fetchReport();
+  fetchAggregates();
+  };
+
+  const fetchAggregates = async () => {
+    const token = localStorage.getItem('token');
+    const base = import.meta.env.VITE_API_BASE || '';
+    try {
+      const mresp = await fetch(`${base}/reports/monthly-revenue?date_range=${encodeURIComponent(dateRange)}${selectedDepartment !== 'all' ? `&department_id=${encodeURIComponent(selectedDepartment)}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (mresp.ok) {
+        const md = await mresp.json();
+        setMonthlyData(Array.isArray(md) ? md : []);
+      }
+
+      const tresp = await fetch(`${base}/reports/technician-metrics?date_range=${encodeURIComponent(dateRange)}${selectedTechnician !== 'all' ? `&technician_id=${encodeURIComponent(selectedTechnician)}` : ''}${selectedDepartment !== 'all' ? `&department_id=${encodeURIComponent(selectedDepartment)}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (tresp.ok) {
+        const td = await tresp.json();
+        setTechnicianMetrics(Array.isArray(td) ? td : []);
+      }
+        // Service trends (distribution + monthly trends)
+        const sresp = await fetch(`${base}/reports/service-trends?date_range=${encodeURIComponent(dateRange)}${selectedServiceType !== 'all' ? `&service_type=${encodeURIComponent(selectedServiceType)}` : ''}${selectedDepartment !== 'all' ? `&department_id=${encodeURIComponent(selectedDepartment)}` : ''}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (sresp.ok) {
+          const sd = await sresp.json();
+          setServiceTrends(sd || []);
+        }
+    } catch (e) {
+      console.error('Failed to fetch aggregates', e);
+    }
+  };
+
+  useEffect(() => {
+    // refresh aggregates and rows when filters or tab change
+    fetchReport();
+    fetchAggregates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, dateRange, selectedDepartment, selectedTechnician, selectedServiceType]);
+
+  const fetchReport = async () => {
+    setLoadingReport(true);
+    try {
+      const token = localStorage.getItem('token');
+      const base = import.meta.env.VITE_API_BASE || '';
+      const resp = await fetch(`${base}/reports/generate?type=${encodeURIComponent(selectedDepartment || 'comprehensive')}&format=json&date_range=${encodeURIComponent(dateRange)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setReportRows(Array.isArray(data.rows) ? data.rows : []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch report', e);
+    } finally {
+      setLoadingReport(false);
+    }
   };
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
         return (
-          <div className="space-y-6">
-            {/* KPI Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {kpiMetrics.map((metric, index) => (
-                <MetricsCard
-                  key={index}
-                  title={metric.title}
-                  value={metric.value}
-                  change={metric.change}
-                  changeType={metric.changeType}
-                  icon={metric.icon}
-                  target={metric.target}
-                  unit={metric.unit}
-                />
-              ))}
+          <div className="flex items-center justify-center min-h-[400px] bg-surface rounded-lg border border-border">
+            <div className="text-center">
+              <Icon name="Clock" size={48} className="text-text-secondary mx-auto mb-4" />
+              <h3 className="text-xl font-heading-semibold text-text-primary mb-2">Coming Soon</h3>
+              <p className="text-text-secondary">The Overview report is currently under development.</p>
             </div>
-            
-            {/* Revenue Chart */}
-            <RevenueChart chartType={chartType} setChartType={setChartType} />
           </div>
         );
       
       case 'revenue':
-        return <RevenueChart chartType={chartType} setChartType={setChartType} />;
+        return (
+          <div className="flex items-center justify-center min-h-[400px] bg-surface rounded-lg border border-border">
+            <div className="text-center">
+              <Icon name="Clock" size={48} className="text-text-secondary mx-auto mb-4" />
+              <h3 className="text-xl font-heading-semibold text-text-primary mb-2">Coming Soon</h3>
+              <p className="text-text-secondary">The Revenue report is currently under development.</p>
+            </div>
+          </div>
+        );
       
       case 'technicians':
-        return <TechnicianPerformance />;
+        return <TechnicianPerformance 
+          reportRows={reportRows} 
+          technicianMetrics={technicianMetrics} 
+          selectedTechnician={selectedTechnician}
+          onTechnicianChange={setSelectedTechnician}
+        />;
       
       case 'services':
-        return <ServiceAnalytics />;
+        return <ServiceAnalytics reportRows={reportRows} serviceTrends={serviceTrends} />;
       
       case 'scheduled':
         return <ScheduledReports />;
@@ -129,7 +197,7 @@ const ReportsAnalytics = () => {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="pt-16">
+  <main className="pt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Breadcrumb />
           

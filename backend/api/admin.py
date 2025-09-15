@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, OTP
+from .models import User, OTP, Department
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -9,3 +9,8 @@ class UserAdmin(admin.ModelAdmin):
 @admin.register(OTP)
 class OTPAdmin(admin.ModelAdmin):
     list_display = ('id', 'email', 'code', 'created_at', 'used')
+
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'description', 'manager', 'created_at')

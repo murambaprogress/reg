@@ -128,9 +128,10 @@ The application is configured to use MySQL database hosted on PythonAnywhere:
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/login/` - User login
-- `POST /api/auth/register/` - User registration
-- `POST /api/auth/refresh/` - Token refresh
+- `POST /api/login/` - User login
+- `POST /api/register/` - User registration
+- `POST /api/verify-otp/` - OTP verification
+- `POST /api/token/refresh/` - Token refresh
 
 ### Core Resources
 - `/api/inventory/` - Inventory management

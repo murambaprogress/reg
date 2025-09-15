@@ -8,6 +8,7 @@ class Job(models.Model):
         ('pending', 'Pending'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
+        ('ready_to_collect', 'Ready to Collect'),
         ('cancelled', 'Cancelled'),
         ('on_hold', 'On Hold'),
     ]
@@ -35,8 +36,7 @@ class Job(models.Model):
     actual_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     
     # Assignment and scheduling
-    technician = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
-    assigned_technician = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='technician_jobs')
+    assigned_technician = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_jobs')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='Medium')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     due_date = models.DateField()
@@ -95,6 +95,7 @@ class JobPart(models.Model):
 class TechnicianProfile(models.Model):
     """Extended profile for technicians"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='technician_profile')
+    department = models.ForeignKey('api.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='technicians')
     specialization = models.CharField(max_length=100, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     hire_date = models.DateField(null=True, blank=True)

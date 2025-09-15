@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
-from .models import OTP
+from .models import OTP, Department
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -17,6 +17,73 @@ from .serializers import RegisterSerializer, LoginSerializer, OTPSerializer, Use
 import logging
 
 User = get_user_model()
+
+
+def calculate_technician_efficiency(technician):
+    """
+    Calculate enhanced efficiency score based on:
+    1. Time management (40%): Completing jobs within estimated hours
+    2. On-time delivery (35%): Completing jobs by due date
+    3. Inventory efficiency (25%): Using parts within estimated cost variance
+    """
+    from jobs.models import Job, JobPart
+    from django.db.models import Sum, F
+    
+    completed_jobs = Job.objects.filter(
+        assigned_technician=technician,
+        status='completed'
+    )
+    
+    if not completed_jobs.exists():
+        return 0
+    
+    total_completed_count = completed_jobs.count()
+    
+    # Time efficiency calculation
+    time_efficient_jobs = completed_jobs.filter(
+        actual_hours__lte=F('estimated_hours')
+    ).count()
+    
+    # On-time delivery calculation
+    on_time_jobs = completed_jobs.filter(
+        completed_at__date__lte=F('due_date')
+    ).count()
+    
+    # Inventory efficiency calculation
+    inventory_efficient_jobs = 0
+    
+    for job in completed_jobs:
+        parts_used = JobPart.objects.filter(job=job)
+        if parts_used.exists():
+            actual_parts_cost = parts_used.aggregate(
+                total=Sum('total_cost')
+            )['total'] or 0
+            
+            # Consider job efficient if parts cost is within 10% of estimated cost
+            if job.estimated_cost > 0:
+                cost_variance = abs(actual_parts_cost - job.estimated_cost) / job.estimated_cost
+                if cost_variance <= 0.1:  # Within 10% variance
+                    inventory_efficient_jobs += 1
+            elif actual_parts_cost == 0:  # No parts used and none estimated
+                inventory_efficient_jobs += 1
+        else:
+            # No parts used - efficient if estimated cost was low/zero
+            if job.estimated_cost <= 50:  # Low cost threshold
+                inventory_efficient_jobs += 1
+    
+    # Calculate component efficiencies
+    time_efficiency = (time_efficient_jobs / total_completed_count) * 100
+    delivery_efficiency = (on_time_jobs / total_completed_count) * 100
+    inventory_efficiency = (inventory_efficient_jobs / total_completed_count) * 100
+    
+    # Weighted efficiency score
+    efficiency_score = (
+        (time_efficiency * 0.40) +
+        (delivery_efficiency * 0.35) +
+        (inventory_efficiency * 0.25)
+    )
+    
+    return min(100, max(0, round(efficiency_score)))
 
 
 def generate_otp():
@@ -332,24 +399,111 @@ def admin_stats(request):
     
     try:
         from jobs.models import Job
+        from django.db.models import Count, Q
         
         # Get technician stats
         technicians = User.objects.filter(role='technician')
         total_technicians = technicians.count()
         active_technicians = technicians.filter(is_active=True).count()
         
-        # Get job stats
+        # Get detailed job stats by status
         jobs = Job.objects.all()
         total_jobs = jobs.count()
-        pending_jobs = jobs.filter(status='Pending').count()
-        completed_jobs = jobs.filter(status='Completed', updated_at__date=timezone.now().date()).count()
+        pending_jobs = jobs.filter(status='pending').count()
+        in_progress_jobs = jobs.filter(status='in_progress').count()
+        ready_to_collect_jobs = jobs.filter(status='ready_to_collect').count()
+        completed_jobs = jobs.filter(status='completed').count()
+        on_hold_jobs = jobs.filter(status='on_hold').count()
+        cancelled_jobs = jobs.filter(status='cancelled').count()
+        
+        # Today's stats
+        today = timezone.now().date()
+        completed_today = jobs.filter(status='completed', updated_at__date=today).count()
+        assigned_today = jobs.filter(created_at__date=today).count()
+        
+        # Overdue jobs (past due date and not completed)
+        overdue_jobs = jobs.filter(
+            due_date__lt=today,
+            status__in=['pending', 'in_progress', 'on_hold']
+        ).count()
+        
+        # Technician workload with efficiency scores
+        technician_workload = []
+        for tech in technicians.filter(is_active=True):
+            tech_jobs = jobs.filter(assigned_technician=tech)
+            active_jobs = tech_jobs.filter(status__in=['pending', 'in_progress', 'on_hold']).count()
+            completed_jobs_tech = tech_jobs.filter(status='completed').count()
+            
+            # Calculate efficiency score
+            efficiency_score = calculate_technician_efficiency(tech)
+            
+            technician_workload.append({
+                'id': tech.id,
+                'username': tech.username,
+                'email': tech.email,
+                'active_jobs': active_jobs,
+                'completed_jobs': completed_jobs_tech,
+                'total_assigned': tech_jobs.count(),
+                'efficiency_score': efficiency_score,
+                'last_login': tech.last_login.isoformat() if tech.last_login else None
+            })
+        
+        # Inventory usage statistics
+        from jobs.models import JobPart
+        from django.db.models import Sum
+        
+        # Today's inventory usage
+        today_parts_usage = JobPart.objects.filter(
+            added_at__date=today
+        ).aggregate(
+            total_cost=Sum('total_cost'),
+            total_items=Sum('quantity_used')
+        )
+        
+        # This week's inventory usage
+        week_start = today - timezone.timedelta(days=today.weekday())
+        week_parts_usage = JobPart.objects.filter(
+            added_at__date__gte=week_start
+        ).aggregate(
+            total_cost=Sum('total_cost'),
+            total_items=Sum('quantity_used')
+        )
+        
+        # Most used parts this week
+        from django.db.models import Count
+        popular_parts = JobPart.objects.filter(
+            added_at__date__gte=week_start
+        ).values('part_number', 'part_name').annotate(
+            usage_count=Sum('quantity_used'),
+            total_cost=Sum('total_cost')
+        ).order_by('-usage_count')[:5]
         
         return Response({
             'totalTechnicians': total_technicians,
             'activeTechnicians': active_technicians,
+            'totalJobs': total_jobs,
             'pendingJobs': pending_jobs,
+            'inProgressJobs': in_progress_jobs,
+            'readyToCollectJobs': ready_to_collect_jobs,
             'completedJobs': completed_jobs,
-            'totalJobs': total_jobs
+            'onHoldJobs': on_hold_jobs,
+            'cancelledJobs': cancelled_jobs,
+            'completedToday': completed_today,
+            'assignedToday': assigned_today,
+            'overdueJobs': overdue_jobs,
+            'technicianWorkload': technician_workload,
+            'inventoryUsage': {
+                'today': {
+                    'total_cost': float(today_parts_usage['total_cost'] or 0),
+                    'total_items': today_parts_usage['total_items'] or 0
+                },
+                'thisWeek': {
+                    'total_cost': float(week_parts_usage['total_cost'] or 0),
+                    'total_items': week_parts_usage['total_items'] or 0
+                },
+                'popularParts': list(popular_parts)
+            },
+            'lastUpdated': timezone.now().isoformat()
         })
     except Exception as e:
         return Response({'message': 'Error fetching stats', 'error': str(e)}, status=500)
@@ -486,22 +640,20 @@ def admin_system_health(request):
     try:
         from jobs.models import Job
         from inventory.models import Part
-        import psutil
-        import os
         
         # Calculate system metrics
         total_jobs = Job.objects.count()
-        completed_jobs = Job.objects.filter(status='Completed').count()
+        completed_jobs = Job.objects.filter(status='completed').count()
         completion_rate = (completed_jobs / total_jobs * 100) if total_jobs > 0 else 0
         
         # Technician utilization
         active_technicians = User.objects.filter(role='technician', is_active=True).count()
-        assigned_jobs = Job.objects.filter(assigned_technician__isnull=False, status__in=['Assigned', 'In Progress']).count()
+        assigned_jobs = Job.objects.filter(assigned_technician__isnull=False, status__in=['in_progress', 'pending']).count()
         technician_utilization = (assigned_jobs / active_technicians * 100) if active_technicians > 0 else 0
         
         # Parts availability
         total_parts = Part.objects.count()
-        available_parts = Part.objects.filter(quantity__gt=0).count()
+        available_parts = Part.objects.filter(current_stock__gt=0).count()
         parts_availability = (available_parts / total_parts * 100) if total_parts > 0 else 0
         
         # System uptime (simplified - in production you'd track actual uptime)
@@ -756,5 +908,750 @@ def dashboard_monthly_stats(request):
         
     except Exception as e:
         return Response({'message': 'Error fetching monthly stats', 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def active_jobs(request):
+    """Return a list of active jobs for admin dashboard (pending/in_progress/on_hold)"""
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        from jobs.models import Job
+
+        qs = Job.objects.filter(status__in=['pending', 'in_progress', 'on_hold']).order_by('-created_at')[:50]
+        data = []
+        for job in qs:
+            # Build a minimal payload matching frontend expectations
+            customer_name = getattr(job, 'customer_name', None) or (job.customer.name if getattr(job, 'customer', None) else None)
+            technician = job.assigned_technician
+            services = []
+            if getattr(job, 'service_description', None):
+                # try to split comma-separated descriptions, otherwise wrap
+                try:
+                    services = [s.strip() for s in job.service_description.split(',') if s.strip()]
+                except Exception:
+                    services = [job.service_description]
+
+            data.append({
+                'id': job.id,
+                'status': job.status,
+                'priority': job.priority.lower() if isinstance(job.priority, str) else job.priority,
+                'vehicle': f"{getattr(job, 'vehicle_year', '')} {getattr(job, 'vehicle_model', '')}".strip(),
+                'customer': customer_name,
+                'technician': technician.username if technician else None,
+                'technician_id': technician.id if technician else None,
+                'services': services,
+                'progress': 0,
+            })
+
+        return Response(data)
+    except Exception as e:
+        return Response({'message': 'Error fetching active jobs', 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def generate_report(request):
+    """Generate simple CSV/JSON report based on type and date_range query params.
+    Returns CSV as attachment when format=csv, otherwise JSON payload.
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    rtype = request.GET.get('type', 'comprehensive')
+    fmt = request.GET.get('format', 'csv')
+    date_range = request.GET.get('date_range', 'month')
+
+    try:
+        # Use helper to build rows
+        rows = build_report_rows(rtype, date_range)
+
+        if fmt == 'csv':
+            # create CSV using HttpResponse
+            from django.http import HttpResponse
+            import csv, io
+            output = io.StringIO()
+            if rows:
+                writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
+                writer.writeheader()
+                for r in rows:
+                    writer.writerow(r)
+            else:
+                output.write('No data\n')
+            csv_content = output.getvalue()
+            filename = f"report_{rtype}_{date_range}_{timezone.now().date().isoformat()}.csv"
+            response = HttpResponse(csv_content, content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+
+        return Response({'type': rtype, 'date_range': date_range, 'rows': rows})
+    except Exception as e:
+        return Response({'message': 'Failed to generate report', 'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def email_report(request):
+    """Generate a report and email it as CSV attachment to recipients.
+    Expects JSON body: { type, date_range, format, recipients: 'a@b.com,b@c.com', subject, message }
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    data = request.data
+    rtype = data.get('type', 'comprehensive')
+    date_range = data.get('date_range', 'month')
+    recipients = data.get('recipients', '')
+    subject = data.get('subject', f'Report: {rtype}')
+    body = data.get('message', 'Please find the attached report.')
+
+
+    # Build CSV from helper
+    try:
+        rows = build_report_rows(rtype, date_range)
+        import csv, io
+        output = io.StringIO()
+        if rows:
+            writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            for r in rows:
+                writer.writerow(r)
+        else:
+            output.write('No data\n')
+        csv_bytes = output.getvalue()
+    except Exception as e:
+        return Response({'message': 'Failed to build report for email', 'error': str(e)}, status=500)
+
+    # send email with attachment
+    to_list = [e.strip() for e in recipients.split(',') if e.strip()]
+    if not to_list:
+        return Response({'message': 'No recipients provided'}, status=400)
+
+    try:
+        from django.core.mail import EmailMessage
+        email = EmailMessage(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', settings.EMAIL_HOST_USER), to_list)
+        email.attach(f'report_{rtype}.csv', csv_bytes, 'text/csv')
+        email.send(fail_silently=False)
+        return Response({'message': 'Report emailed', 'recipients': to_list})
+    except Exception as e:
+        return Response({'message': 'Failed to send email', 'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def whatsapp_share(request):
+    """Return a WhatsApp share URL for a brief report summary or downloadable report link.
+    Expects { type, date_range, summary_only (bool) }
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    rtype = request.data.get('type', 'comprehensive')
+    date_range = request.data.get('date_range', 'month')
+    summary_only = bool(request.data.get('summary_only', True))
+
+    try:
+        # Build a short summary string
+        summary = f"Report: {rtype} | Range: {date_range}"
+        import urllib.parse
+        if summary_only:
+            text = summary + "\nView full report in the dashboard."
+            url = f"https://api.whatsapp.com/send?text={urllib.parse.quote_plus(text)}"
+            return Response({'whatsapp_url': url})
+        else:
+            text = summary + "\nPlease download the CSV from the dashboard and share." 
+            url = f"https://api.whatsapp.com/send?text={urllib.parse.quote_plus(text)}"
+            return Response({'whatsapp_url': url})
+    except Exception as e:
+        return Response({'message': 'Failed to build whatsapp link', 'error': str(e)}, status=500)
+
+
+# Helper to build report rows used by multiple endpoints
+def build_report_rows(rtype, date_range):
+    from jobs.models import Job, JobPart
+    from django.utils import timezone
+    now = timezone.now().date()
+    if date_range == 'today':
+        start = now
+    elif date_range == 'week':
+        start = now - timezone.timedelta(days=now.weekday())
+    elif date_range == 'quarter':
+        month = (now.month - 1) // 3 * 3 + 1
+        start = now.replace(month=month, day=1)
+    elif date_range == 'year':
+        start = now.replace(month=1, day=1)
+    else:
+        start = now.replace(day=1)
+
+    jobs = Job.objects.filter(created_at__date__gte=start).order_by('-created_at')
+    rows = []
+    if rtype in ['revenue', 'comprehensive']:
+        from django.db.models import Sum
+        for j in jobs:
+            parts_cost = JobPart.objects.filter(job=j).aggregate(total=Sum('total_cost'))['total'] or 0
+            rows.append({
+                'job_id': j.id,
+                'customer': getattr(j, 'customer_name', '') or (j.customer.name if getattr(j, 'customer', None) else ''),
+                'vehicle': f"{getattr(j,'vehicle_year','')} {getattr(j,'vehicle_model','')}".strip(),
+                'status': j.status,
+                'created_at': j.created_at.isoformat(),
+                'estimated_cost': float(j.estimated_cost or 0),
+                'actual_cost': float(j.actual_cost or 0),
+                'parts_cost': float(parts_cost or 0)
+            })
+    elif rtype in ['technicians', 'performance']:
+        techs = {}
+        for j in jobs:
+            tech = j.assigned_technician
+            key = tech.username if tech else 'unassigned'
+            rec = techs.setdefault(key, {'technician': key, 'jobs': 0, 'completed': 0})
+            rec['jobs'] += 1
+            if j.status == 'completed':
+                rec['completed'] += 1
+        rows = list(techs.values())
+    else:
+        for j in jobs:
+            rows.append({'job_id': j.id, 'status': j.status, 'created_at': j.created_at.isoformat()})
+    return rows
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def monthly_revenue(request):
+    """Return monthly aggregated revenue totals for charts.
+    Query params: date_range (today|week|month|quarter|year), department_id (optional filter)
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    date_range = request.GET.get('date_range', 'month')
+    department_id = request.GET.get('department_id')
+    
+    try:
+        from django.db.models import Sum
+        from django.db.models.functions import TruncMonth
+        from django.utils import timezone
+        from jobs.models import Job, TechnicianProfile
+
+        now = timezone.now().date()
+        if date_range == 'today':
+            start = now
+        elif date_range == 'week':
+            start = now - timezone.timedelta(days=now.weekday())
+        elif date_range == 'quarter':
+            month = (now.month - 1) // 3 * 3 + 1
+            start = now.replace(month=month, day=1)
+        elif date_range == 'year':
+            start = now.replace(month=1, day=1)
+        else:
+            start = now.replace(day=1)
+
+        qs = Job.objects.filter(created_at__date__gte=start)
+        
+        # Filter by department if provided
+        if department_id and department_id != 'all':
+            try:
+                department = Department.objects.get(id=department_id)
+                # Get technicians in this department
+                dept_technicians = TechnicianProfile.objects.filter(department=department).values_list('user', flat=True)
+                qs = qs.filter(assigned_technician__in=dept_technicians)
+            except Department.DoesNotExist:
+                return Response({'message': 'Department not found'}, status=404)
+
+        # group by month
+        agg = qs.annotate(month=TruncMonth('created_at')).values('month').annotate(
+            total_actual=Sum('actual_cost'),
+            total_estimated=Sum('estimated_cost'),
+            total_parts=Sum('parts_used__total_cost')
+        ).order_by('month')
+
+        data = []
+        for row in agg:
+            month = row.get('month')
+            total_actual = float(row.get('total_actual') or 0)
+            total_parts = float(row.get('total_parts') or 0)
+            total_estimated = float(row.get('total_estimated') or 0)
+            data.append({
+                'month': month.isoformat() if month else None,
+                'total_revenue': round(total_actual + total_parts, 2),
+                'total_actual': round(total_actual, 2),
+                'total_parts': round(total_parts, 2),
+                'total_estimated': round(total_estimated, 2)
+            })
+
+        return Response({'date_range': date_range, 'data': data})
+    except Exception as e:
+        return Response({'message': 'Failed to compute monthly revenue', 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def technician_metrics(request):
+    """Return per-technician aggregated metrics for charts.
+    Query params: date_range (today|week|month|quarter|year), technician_id (optional filter), department_id (optional filter)
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    date_range = request.GET.get('date_range', 'month')
+    technician_id = request.GET.get('technician_id')
+    department_id = request.GET.get('department_id')
+    
+    try:
+        from django.db.models import Count, Avg, Sum
+        from django.utils import timezone
+        from jobs.models import Job, JobPart, TechnicianProfile
+
+        now = timezone.now().date()
+        if date_range == 'today':
+            start = now
+        elif date_range == 'week':
+            start = now - timezone.timedelta(days=now.weekday())
+        elif date_range == 'quarter':
+            month = (now.month - 1) // 3 * 3 + 1
+            start = now.replace(month=month, day=1)
+        elif date_range == 'year':
+            start = now.replace(month=1, day=1)
+        else:
+            start = now.replace(day=1)
+
+        # jobs in range
+        jobs_qs = Job.objects.filter(created_at__date__gte=start)
+
+        # Filter by department if provided
+        if department_id and department_id != 'all':
+            try:
+                department = Department.objects.get(id=department_id)
+                # Get technicians in this department
+                dept_technicians = TechnicianProfile.objects.filter(department=department).values_list('user', flat=True)
+                jobs_qs = jobs_qs.filter(assigned_technician__in=dept_technicians)
+                technicians = User.objects.filter(id__in=dept_technicians, role='technician')
+            except Department.DoesNotExist:
+                return Response({'message': 'Department not found'}, status=404)
+        else:
+            technicians = User.objects.filter(role='technician')
+
+        # Filter by specific technician if provided
+        if technician_id and technician_id != 'all':
+            try:
+                technician = User.objects.get(id=technician_id, role='technician')
+                jobs_qs = jobs_qs.filter(assigned_technician=technician)
+                technicians = [technician]
+            except User.DoesNotExist:
+                return Response({'message': 'Technician not found'}, status=404)
+
+        # aggregate per technician
+        metrics = []
+        for tech in technicians:
+            tech_jobs = jobs_qs.filter(assigned_technician=tech)
+            total_assigned = tech_jobs.count()
+            completed = tech_jobs.filter(status='completed').count()
+            avg_actual_hours = tech_jobs.aggregate(avg_hours=Avg('actual_hours'))['avg_hours'] or 0
+            
+            # Calculate total costs
+            total_actual_cost = tech_jobs.aggregate(total=Sum('actual_cost'))['total'] or 0
+            total_estimated_cost = tech_jobs.aggregate(total=Sum('estimated_cost'))['total'] or 0
+            
+            # Calculate parts costs
+            parts_cost = 0
+            for job in tech_jobs:
+                job_parts_cost = JobPart.objects.filter(job=job).aggregate(total=Sum('total_cost'))['total'] or 0
+                parts_cost += job_parts_cost
+            
+            total_revenue = float(total_actual_cost) + float(parts_cost)
+            
+            efficiency = round((completed / total_assigned * 100), 1) if total_assigned > 0 else 0
+            
+            # Get recent jobs for this technician
+            recent_jobs = tech_jobs.order_by('-created_at')[:5].values(
+                'id', 'customer_name', 'vehicle_model', 'vehicle_plate', 
+                'service_description', 'status', 'actual_cost', 'estimated_cost',
+                'created_at', 'completed_at'
+            )
+            
+            # Add parts cost to each job
+            for job in recent_jobs:
+                job_parts = JobPart.objects.filter(job_id=job['id']).aggregate(total=Sum('total_cost'))['total'] or 0
+                job['parts_cost'] = float(job_parts)
+                job['total_cost'] = float(job['actual_cost'] or 0) + float(job_parts)
+            
+            metrics.append({
+                'technician_id': tech.id,
+                'technician': tech.username,
+                'email': tech.email,
+                'total_assigned': total_assigned,
+                'completed': completed,
+                'avg_actual_hours': float(avg_actual_hours) if avg_actual_hours else 0,
+                'efficiency_percent': efficiency,
+                'total_actual_cost': float(total_actual_cost),
+                'total_estimated_cost': float(total_estimated_cost),
+                'total_parts_cost': float(parts_cost),
+                'total_revenue': total_revenue,
+                'recent_jobs': list(recent_jobs)
+            })
+
+        # sort by efficiency desc
+        metrics = sorted(metrics, key=lambda x: x['efficiency_percent'], reverse=True)
+        return Response({'date_range': date_range, 'data': metrics})
+    except Exception as e:
+        return Response({'message': 'Failed to compute technician metrics', 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def technician_jobs_detail(request, technician_id):
+    """Get detailed job information for a specific technician.
+    Query params: date_range (today|week|month|quarter|year), status (optional filter)
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    date_range = request.GET.get('date_range', 'month')
+    status_filter = request.GET.get('status')
+    
+    try:
+        from django.db.models import Sum
+        from django.utils import timezone
+        from jobs.models import Job, JobPart
+
+        # Verify technician exists
+        try:
+            technician = User.objects.get(id=technician_id, role='technician')
+        except User.DoesNotExist:
+            return Response({'message': 'Technician not found'}, status=404)
+
+        now = timezone.now().date()
+        if date_range == 'today':
+            start = now
+        elif date_range == 'week':
+            start = now - timezone.timedelta(days=now.weekday())
+        elif date_range == 'quarter':
+            month = (now.month - 1) // 3 * 3 + 1
+            start = now.replace(month=month, day=1)
+        elif date_range == 'year':
+            start = now.replace(month=1, day=1)
+        else:
+            start = now.replace(day=1)
+
+        # Get technician's jobs
+        jobs_qs = Job.objects.filter(
+            assigned_technician=technician,
+            created_at__date__gte=start
+        ).order_by('-created_at')
+
+        if status_filter:
+            jobs_qs = jobs_qs.filter(status=status_filter)
+
+        jobs_data = []
+        for job in jobs_qs:
+            # Calculate parts cost for this job
+            parts_cost = JobPart.objects.filter(job=job).aggregate(total=Sum('total_cost'))['total'] or 0
+            
+            jobs_data.append({
+                'id': job.id,
+                'customer_name': job.customer_name or (job.customer.name if job.customer else 'N/A'),
+                'vehicle_model': job.vehicle_model,
+                'vehicle_plate': job.vehicle_plate,
+                'service_description': job.service_description,
+                'status': job.status,
+                'priority': job.priority,
+                'estimated_cost': float(job.estimated_cost or 0),
+                'actual_cost': float(job.actual_cost or 0),
+                'parts_cost': float(parts_cost),
+                'total_cost': float(job.actual_cost or 0) + float(parts_cost),
+                'estimated_hours': float(job.estimated_hours or 0),
+                'actual_hours': float(job.actual_hours or 0),
+                'created_at': job.created_at.isoformat(),
+                'due_date': job.due_date.isoformat() if job.due_date else None,
+                'completed_at': job.completed_at.isoformat() if job.completed_at else None,
+                'notes': job.notes
+            })
+
+        # Calculate summary statistics
+        total_jobs = len(jobs_data)
+        completed_jobs = len([j for j in jobs_data if j['status'] == 'completed'])
+        total_revenue = sum(j['total_cost'] for j in jobs_data)
+        total_estimated = sum(j['estimated_cost'] for j in jobs_data)
+        total_parts = sum(j['parts_cost'] for j in jobs_data)
+        
+        efficiency = round((completed_jobs / total_jobs * 100), 1) if total_jobs > 0 else 0
+
+        return Response({
+            'technician': {
+                'id': technician.id,
+                'name': technician.username,
+                'email': technician.email
+            },
+            'date_range': date_range,
+            'summary': {
+                'total_jobs': total_jobs,
+                'completed_jobs': completed_jobs,
+                'efficiency_percent': efficiency,
+                'total_revenue': round(total_revenue, 2),
+                'total_estimated_cost': round(total_estimated, 2),
+                'total_parts_cost': round(total_parts, 2)
+            },
+            'jobs': jobs_data
+        })
+    except Exception as e:
+        return Response({'message': 'Failed to fetch technician job details', 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def service_trends(request):
+    """Return service distribution and monthly trends.
+    Query params: date_range (today|week|month|quarter|year), service_type (optional filter), department_id (optional filter)
+    """
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    date_range = request.GET.get('date_range', 'month')
+    service_type = request.GET.get('service_type')
+    department_id = request.GET.get('department_id')
+    
+    try:
+        from django.utils import timezone
+        from jobs.models import Job, TechnicianProfile
+
+        now = timezone.now().date()
+        if date_range == 'today':
+            start = now
+        elif date_range == 'week':
+            start = now - timezone.timedelta(days=now.weekday())
+        elif date_range == 'quarter':
+            month = (now.month - 1) // 3 * 3 + 1
+            start = now.replace(month=month, day=1)
+        elif date_range == 'year':
+            start = now.replace(month=1, day=1)
+        else:
+            start = now.replace(day=1)
+
+        qs = Job.objects.filter(created_at__date__gte=start).order_by('created_at')
+
+        # Filter by department if provided
+        if department_id and department_id != 'all':
+            try:
+                department = Department.objects.get(id=department_id)
+                # Get technicians in this department
+                dept_technicians = TechnicianProfile.objects.filter(department=department).values_list('user', flat=True)
+                qs = qs.filter(assigned_technician__in=dept_technicians)
+            except Department.DoesNotExist:
+                return Response({'message': 'Department not found'}, status=404)
+
+        # Filter by service type if provided
+        if service_type and service_type != 'all':
+            # Map frontend service types to database service descriptions
+            service_mapping = {
+                'oil-change': 'oil',
+                'brake-service': 'brake',
+                'tire-service': 'tire',
+                'engine-repair': 'engine',
+                'transmission': 'transmission',
+                'electrical': 'electrical'
+            }
+            
+            filter_keyword = service_mapping.get(service_type, service_type)
+            qs = qs.filter(service_description__icontains=filter_keyword)
+
+        # Build distribution and monthly trends
+        service_map = {}
+        monthly_map = {}
+
+        from django.db.models import Sum
+        from jobs.models import JobPart
+        for j in qs:
+            svc_text = (j.service_description or '').strip()
+            services = [s.strip() for s in svc_text.split(',') if s.strip()]
+            key = services[0] if services else 'Other'
+
+            # accumulate distribution
+            rec = service_map.setdefault(key, {'name': key, 'value': 0, 'revenue': 0.0, 'jobs': 0})
+            # parts cost for job
+            parts_sum = JobPart.objects.filter(job=j).aggregate(total=Sum('total_cost'))['total'] or 0
+            rec['value'] += 1
+            rec['revenue'] += float((j.actual_cost or 0) + (parts_sum or 0))
+            rec['jobs'] += 1
+
+            # monthly aggregation (normalize to month start iso)
+            try:
+                mstart = j.created_at.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                mlabel = mstart.isoformat()
+            except Exception:
+                mlabel = None
+            if mlabel:
+                mrec = monthly_map.setdefault(mlabel, {'month': mlabel, 'categories': {}})
+                mrec['categories'][key] = mrec['categories'].get(key, 0) + 1
+
+        # Convert to lists and add colors
+        colors = ['#4A90E2', '#10B981', '#F59E0B', '#EF4444', '#7C3AED', '#06B6D4']
+        distribution = []
+        for i, (k, v) in enumerate(sorted(service_map.items(), key=lambda x: x[1]['value'], reverse=True)):
+            v['color'] = colors[i % len(colors)]
+            v['revenue'] = round(v['revenue'], 2)
+            distribution.append(v)
+
+        monthly = []
+        for k in sorted(monthly_map.keys()):
+            item = monthly_map[k]
+            monthly.append(item)
+
+        return Response({'date_range': date_range, 'distribution': distribution, 'monthly': monthly})
+    except Exception as e:
+        return Response({'message': 'Failed to compute service trends', 'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def admin_technician_progress(request):
+    """Get detailed technician progress data"""
+    if request.user.role not in ['admin', 'supervisor']:
+        return Response({'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        from jobs.models import Job, JobProgress
+        from django.db.models import Count, Avg, Q
+        from datetime import datetime, timedelta
+        
+        # Get all technicians
+        technicians = User.objects.filter(role='technician').order_by('username')
+        technician_data = []
+        
+        for tech in technicians:
+            # Get current jobs for this technician
+            current_jobs = Job.objects.filter(
+                assigned_technician=tech,
+                status__in=['pending', 'in_progress']
+            ).order_by('-created_at')
+            
+            # Get completed jobs today
+            today = timezone.now().date()
+            completed_today = Job.objects.filter(
+                assigned_technician=tech,
+                status='completed',
+                completed_at__date=today
+            ).count()
+            
+            # Get total assigned jobs
+            total_assigned = Job.objects.filter(assigned_technician=tech).count()
+            
+            # Calculate enhanced efficiency score based on time and inventory usage
+            completed_jobs = Job.objects.filter(
+                assigned_technician=tech,
+                status='completed'
+            )
+            
+            # Calculate enhanced efficiency score and breakdown
+            efficiency_score = calculate_technician_efficiency(tech)
+            
+            # Get detailed efficiency breakdown for display
+            completed_jobs = Job.objects.filter(
+                assigned_technician=tech,
+                status='completed'
+            )
+            
+            efficiency_breakdown = {
+                'time_efficiency': 0,
+                'delivery_efficiency': 0,
+                'inventory_efficiency': 0,
+                'overall_efficiency': efficiency_score
+            }
+            
+            if completed_jobs.exists():
+                from jobs.models import JobPart
+                from django.db.models import Sum, F
+                
+                total_count = completed_jobs.count()
+                
+                # Time efficiency
+                time_efficient = completed_jobs.filter(
+                    actual_hours__lte=F('estimated_hours')
+                ).count()
+                efficiency_breakdown['time_efficiency'] = round((time_efficient / total_count) * 100)
+                
+                # Delivery efficiency
+                on_time = completed_jobs.filter(
+                    completed_at__date__lte=F('due_date')
+                ).count()
+                efficiency_breakdown['delivery_efficiency'] = round((on_time / total_count) * 100)
+                
+                # Inventory efficiency
+                inventory_efficient = 0
+                for job in completed_jobs:
+                    parts_used = JobPart.objects.filter(job=job)
+                    if parts_used.exists():
+                        actual_cost = parts_used.aggregate(Sum('total_cost'))['total_cost__sum'] or 0
+                        if job.estimated_cost > 0:
+                            variance = abs(actual_cost - job.estimated_cost) / job.estimated_cost
+                            if variance <= 0.1:
+                                inventory_efficient += 1
+                        elif actual_cost == 0:
+                            inventory_efficient += 1
+                    else:
+                        if job.estimated_cost <= 50:
+                            inventory_efficient += 1
+                
+                efficiency_breakdown['inventory_efficiency'] = round((inventory_efficient / total_count) * 100)
+            
+            # Format current jobs data
+            current_jobs_data = []
+            for job in current_jobs[:5]:  # Limit to 5 most recent
+                # Get latest progress for this job
+                latest_progress = JobProgress.objects.filter(
+                    job=job,
+                    technician=tech
+                ).order_by('-created_at').first()
+                
+                progress_percentage = latest_progress.progress_percentage if latest_progress else 0
+                
+                current_jobs_data.append({
+                    'id': f'JOB-{job.id:04d}',
+                    'customer_name': job.customer_name or (job.customer.name if job.customer else 'Unknown'),
+                    'vehicle_info': f"{job.vehicle_year} {job.vehicle_model}",
+                    'status': job.status.replace('_', ' ').title(),
+                    'progress_percentage': progress_percentage,
+                    'started_at': job.started_at.isoformat() if job.started_at else None,
+                    'estimated_completion': job.due_date.isoformat() if job.due_date else None
+                })
+            
+            technician_data.append({
+                'id': tech.id,
+                'username': tech.username,
+                'email': tech.email,
+                'is_active': tech.is_active,
+                'current_jobs': current_jobs_data,
+                'completed_today': completed_today,
+                'total_assigned': total_assigned,
+                'efficiency_score': round(efficiency_score),
+                'efficiency_breakdown': efficiency_breakdown,
+                'last_activity': tech.last_login.isoformat() if tech.last_login else None
+            })
+        
+        return Response(technician_data)
+        
+    except Exception as e:
+        return Response({'message': 'Error fetching technician progress', 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def departments_list(request):
+    """Get list of all departments"""
+    try:
+        departments = Department.objects.all().values('id', 'name', 'description')
+        return Response(list(departments))
+    except Exception as e:
+        return Response({'message': 'Error fetching departments', 'error': str(e)}, status=500)
 
 # inventory endpoints moved to the inventory app

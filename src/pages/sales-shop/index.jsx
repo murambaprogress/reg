@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../../components/ui/Header';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 import { SalesProvider } from './SalesContext';
+import { SupplierProvider } from '../supplier-management/SupplierContext';
 import SalesList from './components/SalesList';
 import AddSaleModal from './components/AddSaleModal';
 import { useSales } from './SalesContext';
@@ -59,9 +60,11 @@ const SalesShop = () => {
 
 const WrappedSalesShop = () => (
   <SalesErrorBoundary>
-    <SalesProvider>
-      <SalesShop />
-    </SalesProvider>
+    <SupplierProvider>
+      <SalesProvider>
+        <SalesShop />
+      </SalesProvider>
+    </SupplierProvider>
   </SalesErrorBoundary>
 );
 

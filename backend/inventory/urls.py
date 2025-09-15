@@ -12,6 +12,4 @@ urlpatterns = [
     path('scan/', views.scan_barcode, name='inventory_scan'),
     path('suppliers/', views.suppliers, name='inventory_suppliers'),
     path('transactions/', views.transactions, name='inventory_transactions'),
-    path('customers/', views.customers, name='inventory_customers'),
-    path('customers/<int:pk>/', views.customer_detail, name='inventory_customer_detail'),
 ]

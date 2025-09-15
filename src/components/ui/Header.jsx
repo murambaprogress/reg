@@ -49,7 +49,7 @@ const Header = () => {
   const userMenuRef = useRef(null);
   const location = useLocation();
 
-  const { user, setUser } = useUser();
+  const { user, logout } = useUser();
   const navigate = useNavigate();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
@@ -58,7 +58,7 @@ const Header = () => {
     navigationItems = [
       { label: 'Dashboard', path: '/dashboard-overview', icon: 'LayoutDashboard' },
       { label: 'Jobs', path: '/job-management', icon: 'Wrench' },
-      { label: 'Technician', path: '/technician-workstation', icon: 'Users' },
+      { label: 'Admin', path: '/admin-dashboard', icon: 'Settings' },
       { label: 'Inventory', path: '/inventory-management', icon: 'Package' },
       { label: 'Customers', path: '/customer-management', icon: 'UserCheck' },
       { label: 'Suppliers', path: '/supplier-management', icon: 'Truck' },
@@ -69,7 +69,7 @@ const Header = () => {
     navigationItems = [
       { label: 'Dashboard', path: '/dashboard-overview', icon: 'LayoutDashboard' },
       { label: 'Jobs', path: '/job-management', icon: 'Wrench' },
-      { label: 'Technician', path: '/technician-workstation', icon: 'Users' },
+      { label: 'Admin', path: '/admin-dashboard', icon: 'Settings' },
       { label: 'Inventory', path: '/inventory-management', icon: 'Package' },
       { label: 'Customers', path: '/customer-management', icon: 'UserCheck' },
       { label: 'Suppliers', path: '/supplier-management', icon: 'Truck' },
@@ -78,9 +78,7 @@ const Header = () => {
     ];
   } else if (user?.role === 'technician') {
     navigationItems = [
-      { label: 'Dashboard', path: '/dashboard-overview', icon: 'LayoutDashboard' },
-      { label: 'Jobs', path: '/job-management', icon: 'Wrench' },
-      { label: 'Technician', path: '/technician-workstation', icon: 'Users' },
+      { label: 'Technician Workstation', path: '/technician-workstation', icon: 'Users' },
     ];
   }
 
@@ -109,9 +107,8 @@ const Header = () => {
   };
 
   const handleLogout = () => {
-    // Clear user and navigate to login
-    setUser(null);
-    navigate('/login');
+    // Use the proper logout function from UserContext
+    logout();
   };
 
   const handleMobileMenuToggle = () => {
@@ -146,7 +143,10 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo and Brand */}
           <div className="flex items-center">
-            <Link to="/dashboard-overview" className="flex items-center space-x-3 modern-button p-2 -m-2 rounded-lg">
+            <Link 
+              to={user?.role === 'technician' ? '/technician-workstation' : '/dashboard-overview'} 
+              className="flex items-center space-x-3 modern-button p-2 -m-2 rounded-lg"
+            >
               <h1 className="text-lg font-heading-semibold gradient-text">Regimark Motors</h1>
             </Link>
           </div>
@@ -177,6 +177,18 @@ const Header = () => {
                       <Icon name="ShoppingCart" size={16} />
                       <span className="text-sm">Sales</span>
                     </Link>
+                  )}
+                  
+                  {/* Logout Button - Visible to all authenticated users */}
+                  {user && (
+                    <Button
+                      variant="outline"
+                      onClick={handleLogout}
+                      className="modern-button bg-error/10 hover:bg-error/20 text-error hover:text-error border-error/30 px-3 py-2 rounded-lg hidden sm:inline-flex items-center space-x-2"
+                    >
+                      <Icon name="LogOut" size={16} />
+                      <span className="text-sm">Logout</span>
+                    </Button>
                   )}
             {/* Theme Toggle */}
             <Button
@@ -359,6 +371,21 @@ const Header = () => {
                   <span>{item.label}</span>
                 </Link>
               ))}
+              
+              {/* Mobile Logout Button */}
+              {user && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    handleLogout();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-body-medium nav-transition modern-button text-error hover:text-error hover:bg-error/10"
+                >
+                  <Icon name="LogOut" size={18} />
+                  <span>Logout</span>
+                </Button>
+              )}
             </nav>
           </div>
         )}

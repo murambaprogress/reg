@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const QuickActions = ({ currentJob, onContactCustomer, onViewHistory, onMessageSupervisor }) => {
+const QuickActions = ({ currentJob, jobs = [], onContactCustomer, onViewHistory, onMessageSupervisor }) => {
   const [isMessaging, setIsMessaging] = useState(false);
   const [message, setMessage] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState(null);
+
+  useEffect(() => {
+    if (isMessaging) {
+      // default selection: active/current job else first job in list
+      setSelectedJobId(prev => prev || currentJob?.id || (jobs[0] && jobs[0].id) || null);
+    }
+  }, [isMessaging, currentJob, jobs]);
 
   const handleSendMessage = () => {
-    if (message.trim()) {
-      onMessageSupervisor(currentJob?.id, message);
+    if (message.trim() && selectedJobId) {
+      onMessageSupervisor(selectedJobId, message);
       setMessage('');
       setIsMessaging(false);
     }
@@ -41,33 +49,59 @@ const QuickActions = ({ currentJob, onContactCustomer, onViewHistory, onMessageS
       label: 'Message Supervisor',
       action: () => setIsMessaging(true),
       color: 'text-secondary',
-      disabled: false
+      disabled: jobs.length === 0
     }
   ];
 
-  const recentMessages = [
-    {
-      id: 1,
-      from: 'Supervisor Mike',
-      message: 'Priority job #JOB-2024-001 needs completion by 3 PM',
-      timestamp: '10 min ago',
-      type: 'priority'
-    },
-    {
-      id: 2,
-      from: 'Parts Department',
-      message: 'Brake pads for JOB-2024-003 are ready for pickup',
-      timestamp: '25 min ago',
-      type: 'info'
-    },
-    {
-      id: 3,
-      from: 'Customer Service',
-      message: 'Customer John Smith called about pickup time',
-      timestamp: '1 hour ago',
-      type: 'customer'
+  const [recentMessages, setRecentMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+
+  useEffect(() => {
+    fetchRecentMessages();
+  }, []);
+
+  const fetchRecentMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/jobs/messages/recent/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRecentMessages(data.map(msg => ({
+          id: msg.id,
+          from: msg.sender_name || 'System',
+          message: msg.message,
+          timestamp: getTimeAgo(msg.sent_at),
+          type: msg.message_type || 'info'
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      // Set empty array on error to avoid showing dummy data
+      setRecentMessages([]);
+    } finally {
+      setLoadingMessages(false);
     }
-  ];
+  };
+
+  const getTimeAgo = (timestamp) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInMinutes = Math.floor((now - time) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
 
   const getMessageTypeColor = (type) => {
     switch (type) {
@@ -168,6 +202,21 @@ const QuickActions = ({ currentJob, onContactCustomer, onViewHistory, onMessageS
             </div>
             <div className="space-y-4">
               <div>
+                <label htmlFor="messageJobSelect" className="block text-sm font-body-medium text-text-primary mb-2">Select Job</label>
+                <select
+                  id="messageJobSelect"
+                  name="job"
+                  value={selectedJobId || ''}
+                  onChange={e => setSelectedJobId(e.target.value ? parseInt(e.target.value,10) : null)}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="">-- Choose a Job --</option>
+                  {jobs.map(j => (
+                    <option key={j.id} value={j.id}>JOB-{j.id} | {j.vehicleInfo || j.vehicle_model || 'Vehicle'} | {j.customerName || j.customer_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-body-medium text-text-primary mb-2">
                   Message
                 </label>
@@ -190,7 +239,7 @@ const QuickActions = ({ currentJob, onContactCustomer, onViewHistory, onMessageS
                 <Button
                   variant="primary"
                   onClick={handleSendMessage}
-                  disabled={!message.trim()}
+                  disabled={!message.trim() || !selectedJobId}
                   fullWidth
                 >
                   <Icon name="Send" size={16} className="mr-2" />

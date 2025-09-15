@@ -1,15 +1,17 @@
 from django.db import models
-from inventory.models import Customer
+from inventory.models import Customer, Supplier
 
 
 class Sale(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name='sales')
+    supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name='sales')
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     def __str__(self):
         customer_name = self.customer.name if self.customer else "Walk-in"
-        return f"Sale {self.id} - {customer_name} - {self.total}"
+        supplier_name = f" (Supplier: {self.supplier.name})" if self.supplier else ""
+        return f"Sale {self.id} - {customer_name}{supplier_name} - {self.total}"
 
 
 class SaleItem(models.Model):

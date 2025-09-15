@@ -43,7 +43,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api/auth';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -57,7 +57,7 @@ const Login = () => {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/login`, {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -86,7 +86,13 @@ const Login = () => {
       // Normal login returned token and permissions
       const { token, role, permissions } = data;
       login({ token, role, permissions, name: username });
-      navigate('/dashboard-overview');
+      
+      // Role-based redirection
+      if (role === 'technician') {
+        navigate('/technician-workstation');
+      } else {
+        navigate('/dashboard-overview');
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError('Network error. Please check your connection.');
@@ -106,7 +112,7 @@ const Login = () => {
     }
     
     try {
-      const res = await fetch(`${API_BASE}/verify-otp`, {
+      const res = await fetch(`${API_BASE}/auth/verify-otp`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -128,7 +134,13 @@ const Login = () => {
       if (data.token) {
         const { token, role, permissions } = data;
         login({ token, role, permissions, name: username });
-        navigate('/dashboard-overview');
+        
+        // Role-based redirection
+        if (role === 'technician') {
+          navigate('/technician-workstation');
+        } else {
+          navigate('/dashboard-overview');
+        }
       } else {
         // simple verified message
         setOtpRequired(false);

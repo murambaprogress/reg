@@ -52,6 +52,7 @@ const SalesList = ({ onEdit = () => {}, onDelete = () => {} }) => {
               <th className="p-4 text-left">#</th>
               <th className="p-4 text-left">Date</th>
               <th className="p-4 text-left">Customer</th>
+              <th className="p-4 text-left">Supplier</th>
               <th className="p-4 text-left">Items</th>
               <th className="p-4 text-left">Total</th>
               <th className="p-4 text-left">Actions</th>
@@ -63,6 +64,13 @@ const SalesList = ({ onEdit = () => {}, onDelete = () => {} }) => {
                 <td className="p-4">{i + 1}</td>
                 <td className="p-4">{new Date(s.date).toLocaleString()}</td>
                 <td className="p-4">{s.customer?.name || 'Walk-in'}</td>
+                <td className="p-4">
+                  {s.supplier?.name ? (
+                    <span className="text-sm text-text-primary">{s.supplier.name}</span>
+                  ) : (
+                    <span className="text-sm text-text-secondary">-</span>
+                  )}
+                </td>
                 <td className="p-4">
                   {s.items?.map((it, idx) => (
                     <div key={`${it.part_number || it.name}-${idx}`} className="text-sm text-text-secondary">
@@ -85,7 +93,7 @@ const SalesList = ({ onEdit = () => {}, onDelete = () => {} }) => {
             ))}
             {sales.length === 0 && (
               <tr>
-                <td className="p-6 text-text-secondary" colSpan={6}>No sales yet.</td>
+                <td className="p-6 text-text-secondary" colSpan={7}>No sales yet.</td>
               </tr>
             )}
           </tbody>

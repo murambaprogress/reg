@@ -36,7 +36,7 @@ class JobSerializer(serializers.ModelSerializer):
     
     technician_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), 
-        source='technician', 
+        source='assigned_technician', 
         write_only=True, 
         required=False, 
         allow_null=True
@@ -44,6 +44,8 @@ class JobSerializer(serializers.ModelSerializer):
     technician = serializers.SerializerMethodField(read_only=True)
     
     parts_used = JobPartSerializer(many=True, read_only=True)
+    # Backward compatibility: some frontend code expects 'parts'
+    parts = JobPartSerializer(source='parts_used', many=True, read_only=True)
     status_history = JobStatusHistorySerializer(many=True, read_only=True)
     
     # Frontend field mappings (camelCase)
@@ -70,7 +72,7 @@ class JobSerializer(serializers.ModelSerializer):
             'estimated_hours', 'estimated_cost', 'actual_hours', 'actual_cost',
             'priority', 'status', 'due_date', 'notes', 'vehicle_photos',
             'created_at', 'updated_at', 'started_at', 'completed_at',
-            'parts_used', 'status_history',
+            'parts_used', 'parts', 'status_history',
             # Frontend camelCase fields
             'vehicleModel', 'vehiclePlate', 'vehicleYear', 'serviceDescription',
             'estimatedHours', 'estimatedCost', 'actualHours', 'actualCost',
@@ -88,11 +90,11 @@ class JobSerializer(serializers.ModelSerializer):
         return None
 
     def get_technician(self, obj):
-        if obj.technician:
+        if obj.assigned_technician:
             return {
-                'id': obj.technician.id,
-                'name': obj.technician.username,
-                'email': obj.technician.email
+                'id': obj.assigned_technician.id,
+                'name': obj.assigned_technician.username,
+                'email': obj.assigned_technician.email
             }
         return None
 
@@ -155,15 +157,23 @@ class JobSerializer(serializers.ModelSerializer):
 class JobListSerializer(serializers.ModelSerializer):
     """Simplified serializer for job lists"""
     customer_name = serializers.CharField(read_only=True)
-    technician_name = serializers.CharField(source='technician.username', read_only=True)
+    customer_id = serializers.IntegerField(source='customer.id', read_only=True)
+    technician_name = serializers.CharField(source='assigned_technician.username', read_only=True)
+    assigned_technician = serializers.PrimaryKeyRelatedField(read_only=True)
+    assigned_technician_name = serializers.CharField(source='assigned_technician.username', read_only=True)
+    vehicle_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Job
         fields = (
-            'id', 'customer_name', 'vehicle_model', 'vehicle_plate', 'vehicle_year',
+            'id', 'customer_id', 'customer_name', 'vehicle_model', 'vehicle_plate', 'vehicle_year',
             'service_description', 'estimated_cost', 'priority', 'status', 'due_date',
-            'technician_name', 'created_at', 'updated_at'
+            'technician_name', 'assigned_technician', 'assigned_technician_name', 
+            'vehicle_info', 'created_at', 'updated_at'
         )
+    
+    def get_vehicle_info(self, obj):
+        return f"{obj.vehicle_year} {obj.vehicle_model} ({obj.vehicle_plate})"
 
 
 class TechnicianProfileSerializer(serializers.ModelSerializer):
@@ -219,6 +229,38 @@ class PartsRequestSerializer(serializers.ModelSerializer):
             'requested_at', 'approved_by', 'approved_by_name', 'approved_at'
         )
         read_only_fields = ('requested_at',)
+
+    # allow part_name to be omitted by technicians; we'll fill it from inventory on create
+    part_name = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_quantity_requested(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Quantity requested must be greater than zero')
+        return value
+
+    def validate_part_number(self, value):
+        # Ensure the part exists in inventory
+        from inventory.models import Part
+        try:
+            Part.objects.get(part_number=value)
+        except Part.DoesNotExist:
+            raise serializers.ValidationError(f'Part with part_number "{value}" not found in inventory')
+        return value
+
+    def create(self, validated_data):
+        # Populate the part_name from inventory and enforce pending status on creation
+        from inventory.models import Part
+        part_number = validated_data.get('part_number')
+        try:
+            part = Part.objects.get(part_number=part_number)
+            validated_data['part_name'] = part.description or part_number
+        except Part.DoesNotExist:
+            # Should not happen because validate_part_number checks, but guard anyway
+            validated_data['part_name'] = validated_data.get('part_name', part_number)
+
+        # Ensure newly created requests are pending
+        validated_data['status'] = 'pending'
+        return super().create(validated_data)
 
 
 class TechnicianMessageSerializer(serializers.ModelSerializer):
