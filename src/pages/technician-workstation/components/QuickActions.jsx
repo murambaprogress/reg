@@ -56,7 +56,7 @@ const QuickActions = ({ currentJob, jobs = [], onContactCustomer, onViewHistory,
   const [recentMessages, setRecentMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     fetchRecentMessages();
@@ -115,7 +115,7 @@ const QuickActions = ({ currentJob, jobs = [], onContactCustomer, onViewHistory,
   return (
     <div className="space-y-6">
       {/* Quick Actions */}
-      <div className="bg-surface rounded-lg border border-border p-6 shadow-card">
+  <div className="bg-[var(--color-surface)] dark:bg-[var(--color-background)] text-[var(--color-text-primary)] dark:text-[var(--color-text-primary)] rounded-lg border border-border p-6 shadow-card">
         <h3 className="text-lg font-heading-semibold text-text-primary mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {quickActionItems.map((item, index) => (

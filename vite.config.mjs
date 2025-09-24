@@ -18,9 +18,9 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'https://progress.pythonanywhere.com',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       }
     }
   }

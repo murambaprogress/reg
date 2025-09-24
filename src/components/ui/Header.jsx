@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../AppIcon';
 import Button from './Button';
 import { useTheme } from './ThemeProvider';
+import { useTechnicianSync } from '../../pages/technician-workstation/TechnicianSyncContext';
 import { useUser } from '../UserContext';
 
 const Header = () => {
@@ -10,6 +11,12 @@ const Header = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { messages: technicianMessages } = useTechnicianSync();
+  // Placeholder: Replace with real API call for low stock alerts
+  const [lowStockAlerts] = useState([
+    { id: 'stock-1', title: 'Low Stock Alert', message: 'Brake pads running low', type: 'warning', time: '5 min ago', read: false },
+    { id: 'stock-2', title: 'Low Stock Alert', message: 'Oil filters below threshold', type: 'warning', time: '10 min ago', read: false }
+  ]);
   // Debtor due date notifications (demo, in real app fetch from backend)
   const today = new Date().toISOString().slice(0, 10);
   const debtorDueNotifications = [
@@ -37,13 +44,20 @@ const Header = () => {
     read: false,
   }));
 
-  const [notifications] = useState([
-    { id: 1, title: 'Low Stock Alert', message: 'Brake pads running low', type: 'warning', time: '5 min ago', read: false },
-    { id: 2, title: 'Job Completed', message: 'Vehicle #VH001 service completed', type: 'success', time: '15 min ago', read: false },
-    { id: 3, title: 'New Customer', message: 'John Smith registered', type: 'info', time: '1 hour ago', read: true },
+  // Merge notifications: low stock, technician messages, and existing ones
+  const notifications = [
+    ...lowStockAlerts,
+    ...technicianMessages.map((msg, i) => ({
+      id: `tech-msg-${msg.id || i}`,
+      title: 'Technician Message',
+      message: msg.message || msg.text || 'Message from technician',
+      type: 'info',
+      time: msg.time || msg.created_at || 'Just now',
+      read: !!msg.read
+    })),
     ...debtorDueNotifications,
     ...supplierDueNotifications,
-  ]);
+  ];
   
   const notificationRef = useRef(null);
   const userMenuRef = useRef(null);
@@ -138,7 +152,7 @@ const Header = () => {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 bg-surface/95 backdrop-blur-sm border-b border-border z-nav shadow-elegant">
+    <header className="fixed top-0 left-0 right-0 bg-[var(--color-surface)] text-[var(--color-text-primary)] dark:bg-[var(--color-background)] dark:text-[var(--color-text-primary)] border-b border-[var(--color-border)] z-nav shadow-elegant">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Brand */}
@@ -147,7 +161,7 @@ const Header = () => {
               to={user?.role === 'technician' ? '/technician-workstation' : '/dashboard-overview'} 
               className="flex items-center space-x-3 modern-button p-2 -m-2 rounded-lg"
             >
-              <h1 className="text-lg font-heading-semibold gradient-text">Regimark Motors</h1>
+              <h1 className="text-lg font-heading-semibold gradient-text">Regimark Autoelectrics</h1>
             </Link>
           </div>
 
@@ -178,18 +192,7 @@ const Header = () => {
                       <span className="text-sm">Sales</span>
                     </Link>
                   )}
-                  
-                  {/* Logout Button - Visible to all authenticated users */}
-                  {user && (
-                    <Button
-                      variant="outline"
-                      onClick={handleLogout}
-                      className="modern-button bg-error/10 hover:bg-error/20 text-error hover:text-error border-error/30 px-3 py-2 rounded-lg hidden sm:inline-flex items-center space-x-2"
-                    >
-                      <Icon name="LogOut" size={16} />
-                      <span className="text-sm">Logout</span>
-                    </Button>
-                  )}
+        
             {/* Theme Toggle */}
             <Button
               variant="ghost"
@@ -198,61 +201,6 @@ const Header = () => {
             >
               <Icon name={theme === 'light' ? 'Moon' : 'Sun'} size={20} />
             </Button>
-
-            {/* Notifications */}
-            <div className="relative" ref={notificationRef}>
-              <Button
-                variant="ghost"
-                onClick={handleNotificationClick}
-                className="modern-button relative p-2 hover:bg-background/50"
-              >
-                <Icon name="Bell" size={20} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-error text-error-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center font-data-normal shadow-lg animate-pulse leading-none text-center">
-                    <span className="w-full">{unreadCount}</span>
-                  </span>
-                )}
-              </Button>
-
-              {isNotificationOpen && (
-                <div className="absolute right-0 mt-2 w-80 modern-card z-dropdown animate-in slide-in-from-top-2">
-                  <div className="p-4 border-b border-border">
-                    <h3 className="text-sm font-heading-medium text-text-primary">Notifications</h3>
-                  </div>
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={`p-4 border-b border-border last:border-b-0 micro-interaction hover:bg-background/50 ${
-                          !notification.read ? 'bg-accent/5' : ''
-                        }`}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <Icon 
-                            name={getNotificationIcon(notification.type)} 
-                            size={16} 
-                            className={getNotificationColor(notification.type)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-body-medium text-text-primary">{notification.title}</p>
-                            <p className="text-sm text-text-secondary mt-1">{notification.message}</p>
-                            <p className="text-xs text-text-secondary mt-2">{notification.time}</p>
-                          </div>
-                          {!notification.read && (
-                            <div className="w-2 h-2 bg-accent rounded-full shadow-glow"></div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-4 border-t border-border">
-                    <Button variant="text" fullWidth className="modern-button">
-                      View All Notifications
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* User Menu */}
             <div className="relative" ref={userMenuRef}>

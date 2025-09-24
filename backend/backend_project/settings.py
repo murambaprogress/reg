@@ -23,13 +23,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'billing.apps.BillingConfig',
     'api',
     'inventory',
     'customers',
     'suppliers',
     'sales',
     'jobs',
-    'billing',
 ]
 
 MIDDLEWARE = [
@@ -53,7 +53,10 @@ ROOT_URLCONF = 'backend_project.urls'
 
 # Frontend template directories
 FRONTEND_DIR = os.path.join(BASE_DIR, 'static', 'frontend')
-BUILD_DIR = os.path.join(BASE_DIR.parent, 'build')  # Root build directory
+BUILD_DIR = os.path.join(BASE_DIR.parent, 'build')  # Root build directory for frontend
+
+# In production, serve frontend from Progress.pythonanywhere.com
+FRONTEND_PROD_URL = 'https://progress.pythonanywhere.com'
 
 TEMPLATES = [
     {
@@ -78,7 +81,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend_project.wsgi.application'
 
 # Database (MySQL via PythonAnywhere)
-"""
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -89,9 +91,9 @@ DATABASES = {
         'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
-"""
 
 #local db
+"""
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -102,6 +104,7 @@ DATABASES = {
         'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
+"""
 
 AUTH_USER_MODEL = 'api.User'
 
@@ -120,8 +123,12 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),           # Primary: backend/static
     os.path.join(BASE_DIR.parent, 'build', 'assets'),  # Build directory assets
-    BUILD_DIR,                                  # Fallback: build directory
+    BUILD_DIR                                   # Fallback: build directory
 ]
+
+# In production, set STATIC_URL to Progress.pythonanywhere.com
+if not DEBUG:
+    STATIC_URL = FRONTEND_PROD_URL + '/static/'
 
 # Media files
 MEDIA_URL = '/media/'
@@ -158,6 +165,12 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
+    ],
+    # Ensure multipart/form-data uploads are parsed (file uploads)
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
     ],
 }
 

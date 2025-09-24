@@ -100,7 +100,7 @@ const JobDetailsModal = ({ job, isOpen, onClose, onUpdateJob }) => {
   const [serviceHistory, setServiceHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     if (isOpen && job) {

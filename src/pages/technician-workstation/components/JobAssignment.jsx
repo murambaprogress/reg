@@ -11,7 +11,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedTechnician, setSelectedTechnician] = useState('');
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     fetchJobs();

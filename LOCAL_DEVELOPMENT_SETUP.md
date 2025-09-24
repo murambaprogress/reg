@@ -1,6 +1,6 @@
 # Local Development Setup Guide
 
-This guide will help you set up the Regimark Motors Control Center project to run locally on your machine.
+This guide will help you set up the Regimark Autoelectrics Control Center project to run locally on your machine.
 
 ## Prerequisites
 

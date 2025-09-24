@@ -5,6 +5,8 @@ const DebtorContext = createContext();
 
 export const DebtorProvider = ({ children }) => {
   const { debtors, fetchDebtors, loading, error } = useBilling();
+  // Provide a refetch function for consumers
+  const refetch = () => fetchDebtors();
 
   useEffect(() => {
     // Initial fetch (billing page already triggers, but safe if direct load)
@@ -12,7 +14,7 @@ export const DebtorProvider = ({ children }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <DebtorContext.Provider value={{ debtors, loading, error }}>
+    <DebtorContext.Provider value={{ debtors, loading, error, refetch }}>
       {children}
     </DebtorContext.Provider>
   );

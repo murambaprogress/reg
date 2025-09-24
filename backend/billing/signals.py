@@ -13,13 +13,19 @@ def update_debtor_on_invoice_save(sender, instance: Invoice, created, **kwargs):
     - If invoice transitions to paid or cancelled and customer has no more unpaid invoices, remove Debtor.
     - Always refresh total_outstanding and oldest_invoice_date.
     """
-    # Treat draft invoices as contributing to debtor tracking per requirement
-    unpaid_statuses = {'sent', 'overdue', 'draft'}
+    def _update_debtor():
+        # Treat draft invoices as contributing to debtor tracking per requirement
+        unpaid_statuses = {'sent', 'overdue', 'draft'}
 
-    # Use a transaction to keep consistency if multiple invoices saved in a batch
-    with transaction.atomic():
         customer = instance.customer
-        debtor, _ = Debtor.objects.get_or_create(customer=customer)
+        debtor = Debtor.objects.filter(customer=customer).first()
+        if not debtor:
+            debtor = Debtor.objects.create(
+                customer=customer,
+                initial_amount=0,
+                current_balance=0,
+                due_date=timezone.now().date()
+            )
 
         # Recompute outstanding using current unpaid (including draft) invoices
         qs_unpaid = customer.invoices.filter(status__in=unpaid_statuses)
@@ -45,3 +51,6 @@ def update_debtor_on_invoice_save(sender, instance: Invoice, created, **kwargs):
             debtor.status = 'paid'
 
         debtor.save()
+
+    # Defer the update until the transaction commits to avoid TransactionManagementError
+    transaction.on_commit(_update_debtor)

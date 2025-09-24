@@ -1,5 +1,5 @@
 @echo off
-REM Build and Deploy Script for Regimark Motors Control Center
+REM Build and Deploy Script for Regimark Autoelectrics Control Center
 REM This script builds the frontend and prepares for deployment
 
 echo 🚀 Starting build and deployment process...

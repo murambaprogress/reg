@@ -31,11 +31,11 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
 class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
-        fields = ('id', 'name', 'contact', 'email', 'phone', 'amount', 'due_date', 'state', 
+        fields = ('id', 'name', 'contact', 'email', 'phone', 'goods_supplier', 'amount', 'amount_paid', 'due_date', 'state', 
                  'products_supplied', 'previous', 'future', 'payments')
 
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
-        fields = ('id', 'name', 'email', 'phone', 'address', 'preferred_contact', 'notes', 'status', 'join_date', 'last_service_date', 'total_spent', 'metadata')
+        fields = ('id', 'name', 'email', 'phone', 'address', 'preferred_contact', 'notes', 'status', 'join_date', 'last_service_date', 'total_spent', 'amount_received', 'inventory_sold', 'full_cost', 'metadata')

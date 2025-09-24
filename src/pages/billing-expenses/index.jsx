@@ -12,6 +12,8 @@ import { useUser } from '../../components/UserContext';
 import ExpenseStatsCard from './components/ExpenseStatsCard';
 import { BillingProvider, useBilling } from './BillingContext';
 
+import { NotificationProvider } from '../../hooks/useNotification';
+
 const BillingExpensesContent = () => {
   const [activeTab, setActiveTab] = useState('billing');
   const [isPersonalExpenseModalOpen, setIsPersonalExpenseModalOpen] = useState(false);
@@ -279,12 +281,12 @@ const BillingExpensesContent = () => {
 };
 
 // Wrapper component with BillingProvider
-const BillingExpenses = () => {
-  return (
+const WrappedBillingExpenses = () => (
+  <NotificationProvider>
     <BillingProvider>
       <BillingExpensesContent />
     </BillingProvider>
-  );
-};
+  </NotificationProvider>
+);
 
-export default BillingExpenses;
+export default WrappedBillingExpenses;

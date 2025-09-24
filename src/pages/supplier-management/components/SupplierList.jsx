@@ -25,8 +25,9 @@ const SupplierList = () => {
     const name = (s && s.name) ? String(s.name) : '';
     const contact = (s && s.contact) ? String(s.contact) : '';
     const phone = (s && s.phone) ? String(s.phone) : '';
+    const goodsSupplier = (s && s.goodsSupplier) ? String(s.goodsSupplier) : '';
     const q = String(search || '').toLowerCase();
-    return name.toLowerCase().includes(q) || contact.toLowerCase().includes(q) || phone.includes(q);
+    return name.toLowerCase().includes(q) || contact.toLowerCase().includes(q) || phone.includes(q) || goodsSupplier.toLowerCase().includes(q);
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -60,7 +61,7 @@ const SupplierList = () => {
 
   // Calculate totals for all filtered suppliers
   const totalAmount = filtered.reduce((sum, s) => sum + (s.amount || 0), 0);
-  const totalPaid = filtered.reduce((sum, s) => sum + ((s.payments || []).reduce((pSum, p) => pSum + (p.amount || 0), 0)), 0);
+  const totalPaid = filtered.reduce((sum, s) => sum + (s.amountPaid || 0), 0);
   const totalDue = totalAmount - totalPaid;
 
   return (
@@ -94,17 +95,19 @@ const SupplierList = () => {
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Contact</th>
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Phone</th>
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Products Supplied</th>
+              <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Goods Supplier</th>
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Amount</th>
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">State</th>
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Due Date</th>
               <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Actions</th>
+            <th className="py-3 px-4 text-left text-xs font-heading-medium text-text-secondary uppercase tracking-wider">Pay</th>
             </tr>
           </thead>
           <tbody className="bg-surface divide-y divide-border">
             {paginated.length === 0 ? (
               <tr><td colSpan={8} className="text-center py-8 text-text-secondary">No suppliers found.</td></tr>
             ) : paginated.map(supplier => {
-              const totalPaid = (supplier.payments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+              const totalPaid = supplier.amountPaid || 0;
               const amountDue = (supplier.amount || 0) - totalPaid;
               return (
                 <tr key={supplier.id} className="hover:bg-muted/50 transition-colors">
@@ -112,6 +115,7 @@ const SupplierList = () => {
                   <td className="py-3 px-4 text-text-secondary">{supplier.contact}</td>
                   <td className="py-3 px-4 text-text-secondary">{supplier.phone}</td>
                   <td className="py-3 px-4 text-text-secondary">{supplier.productsSupplied || '-'}</td>
+                  <td className="py-3 px-4 text-text-secondary">{supplier.goodsSupplier || '-'}</td>
                   <td className="py-3 px-4 text-text-primary">
                     ${supplier.amount}
                     <div className="text-xs text-text-secondary mt-1">
@@ -130,6 +134,17 @@ const SupplierList = () => {
                       <Button size="sm" variant="ghost" onClick={() => { setEditingSupplier(supplier); setShowEditModal(true); }}>Edit</Button>
                       <Button size="sm" variant="destructive" onClick={() => { setDeletingSupplier(supplier); setShowConfirm(true); }}>Delete</Button>
                     </div>
+                  </td>
+                  <td className="py-3 px-4 text-text-secondary">
+                    <Button size="sm" variant="success" onClick={async () => {
+                      await updateSupplier(supplier.id, { pay_all: true, state: supplier.state !== 'due' ? 'cleared' : supplier.state });
+                    }}>Pay All</Button>
+                    <Button size="sm" variant="primary" onClick={async () => {
+                      const part = prompt('Enter part payment amount:', amountDue);
+                      if (part && !isNaN(part)) {
+                        await updateSupplier(supplier.id, { amountPaid: totalPaid + Number(part), state: (totalPaid + Number(part)) >= supplier.amount ? 'cleared' : supplier.state });
+                      }
+                    }}>Pay Part</Button>
                   </td>
                 </tr>
               );

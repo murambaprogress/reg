@@ -15,6 +15,7 @@ const EditSupplierModal = ({ isOpen, supplier, onClose }) => {
         contact: supplier.contact || '',
         phone: supplier.phone || '',
         amount: supplier.amount || 0,
+        amountPaid: supplier.amountPaid || 0,
         dueDate: supplier.dueDate || '',
         state: supplier.state || 'due',
       });
@@ -35,8 +36,21 @@ const EditSupplierModal = ({ isOpen, supplier, onClose }) => {
       contact: form.contact,
       phone: form.phone,
       amount: Number(form.amount || 0),
+      amountPaid: Number(form.amountPaid || 0),
       dueDate: form.dueDate || null,
       state: form.state,
+    }).then(() => {
+      setSubmitting(false);
+      onClose();
+    }).catch(() => setSubmitting(false));
+
+  };
+
+  const handlePayAll = () => {
+    setSubmitting(true);
+    updateSupplier(supplier.id, {
+      ...supplier,
+      amountPaid: supplier.amount,
     }).then(() => {
       setSubmitting(false);
       onClose();
@@ -52,12 +66,16 @@ const EditSupplierModal = ({ isOpen, supplier, onClose }) => {
           <Input name="contact" label="Contact Person" value={form.contact} onChange={handleChange} required />
           <Input name="phone" label="Phone" value={form.phone} onChange={handleChange} required />
           <Input name="amount" label="Amount" type="number" value={form.amount} onChange={handleChange} required min={0} />
+          <Input name="amountPaid" label="Amount Paid" type="number" value={form.amountPaid} onChange={handleChange} min={0} />
           <Input name="dueDate" label="Due Date" type="date" value={form.dueDate} onChange={handleChange} />
           <div className="flex gap-2">
             <Button type="submit" variant="primary" disabled={submitting} className="flex-1">{submitting ? 'Saving...' : 'Save'}</Button>
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
           </div>
         </form>
+        <div className="flex mt-4">
+          <Button type="button" variant="success" disabled={submitting} onClick={handlePayAll} className="w-full">Pay All / Clear</Button>
+        </div>
       </div>
     </div>
   );

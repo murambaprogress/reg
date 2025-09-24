@@ -1,0 +1,878 @@
+import React, { useState, useEffect } from 'react';
+import Icon from '../../../components/AppIcon';
+import Button from '../../../components/ui/Button';
+import Input from '../../../components/ui/Input';
+import Modal from '../../../components/ui/Modal';
+import { useBilling } from '../BillingContext';
+
+const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = 'create' }) => {
+  const { createInvoice, updateInvoice, loading } = useBilling();
+  const [customers, setCustomers] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [errors, setErrors] = useState({});
+  const [formData, setFormData] = useState({
+    // Company Information (Pre-filled, not editable)
+    company_name: 'SOLTAM STEEL (PTY) LTD',
+    company_registration: 'REG. NO. 2018/456129/07',
+    company_vat: 'VAT NO. 4450294315',
+    company_address: '2 AXLE DRIVE, CLAYVILLE EAST, OLIFANTSFONTEIN, 1666',
+    company_tel: 'TEL: (010) 500 2500',
+    company_email: 'info@soltam.co.za',
+    
+    // Invoice Details (Editable)
+    invoice_number: '',
+    date: new Date().toISOString().split('T')[0],
+    order_number: '',
+    delivery_note: '',
+
+    // Customer Details (Editable)
+    customer_name: '',
+    customer_vat: '',
+    customer_address: '',
+    contact_person: '',
+    contact_phone: '',
+
+    // Banking Details (Pre-filled, not editable)
+    bank_name: 'FIRST NATIONAL BANK',
+    account_name: 'SOLTAM STEEL',
+    account_type: 'BUSINESS CHEQUE',
+    account_number: '250 655 099 47',
+    branch_code: '250 655',
+    swift_code: 'FIRNZAJJ',
+    
+    // Items
+    items: [],
+    
+    // Totals
+    subtotal: '0',
+    vat_rate: '15',
+    vat_amount: '0',
+    total_amount: '0'
+  });
+
+  const calculateSubtotal = () => {
+    return formData.items.reduce((acc, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const unitPrice = parseFloat(item.unit_price) || 0;
+      return acc + (quantity * unitPrice);
+    }, 0);
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.invoice_number) newErrors.invoice_number = 'Invoice number is required';
+    if (!formData.date) newErrors.date = 'Date is required';
+    if (!formData.customer_name) newErrors.customer_name = 'Customer name is required';
+    
+    if (formData.items.length === 0) {
+      newErrors.items = 'At least one item is required';
+    } else {
+      formData.items.forEach((item, index) => {
+        if (!item.description) newErrors[`items.${index}.description`] = 'Description is required';
+        if (!item.unit_price) newErrors[`items.${index}.unit_price`] = 'Unit price is required';
+        if (!item.quantity) newErrors[`items.${index}.quantity`] = 'Quantity is required';
+      });
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      const subtotal = calculateSubtotal();
+      const invoiceData = {
+        ...formData,
+        subtotal: subtotal.toString(),
+        items: formData.items.map(item => ({
+          ...item,
+          quantity: parseFloat(item.quantity),
+          unit_price: parseFloat(item.unit_price)
+        }))
+      };
+
+      if (mode === 'create') {
+        await createInvoice(invoiceData);
+      } else {
+        await updateInvoice(invoice.id, invoiceData);
+      }
+      onClose();
+    } catch (error) {
+      console.error('Error submitting invoice:', error);
+    }
+  };
+
+  const handleAddItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { description: '', quantity: '', unit_price: '', discount: '0' }]
+    }));
+  };
+
+  const handleRemoveItem = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    setFormData(prev => {
+      const newItems = [...prev.items];
+      newItems[index] = { ...newItems[index], [field]: value };
+      return { ...prev, items: newItems };
+    });
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="full">
+      <div className="w-full h-full bg-white p-8 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto">
+          {/* Company Header */}
+          <div className="flex justify-between items-start mb-8">
+            {/* Left side - Company Details */}
+            <div className="text-left flex-grow">
+              <h1 className="text-3xl font-bold uppercase tracking-wider mb-3">{formData.company_name}</h1>
+              <div className="space-y-1 text-sm">
+                <p className="font-semibold">{formData.company_registration}</p>
+                <p className="font-semibold">{formData.company_vat}</p>
+                <p>{formData.company_address}</p>
+                <p>{formData.company_tel}</p>
+                <p>{formData.company_email}</p>
+              </div>
+            </div>
+
+            {/* Right side - Invoice Details */}
+            <div className="text-right min-w-[250px]">
+              <h2 className="text-2xl font-bold mb-6 tracking-wider text-gray-800">TAX INVOICE</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-1 text-gray-600">Invoice No:</label>
+                  <Input
+                    name="invoice_number"
+                    value={formData.invoice_number}
+                    onChange={(e) => setFormData(prev => ({ ...prev, invoice_number: e.target.value }))}
+                    error={errors.invoice_number}
+                    className="w-full text-right font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1 text-gray-600">Date:</label>
+                  <Input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    error={errors.date}
+                    className="w-full text-right"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer and Order Details */}
+          <div className="border-t border-b border-gray-300 py-6 mb-8">
+            <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+              {/* Left Column - Customer Details */}
+              <div>
+                <h3 className="text-lg font-bold mb-4">Bill To:</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">Customer Name:</label>
+                    <Input
+                      name="customer_name"
+                      value={formData.customer_name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customer_name: e.target.value }))}
+                      error={errors.customer_name}
+                      className="w-full font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">VAT Number:</label>
+                    <Input
+                      name="customer_vat"
+                      value={formData.customer_vat}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customer_vat: e.target.value }))}
+                      error={errors.customer_vat}
+                      className="w-full font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">Physical Address:</label>
+                    <Input
+                      name="customer_address"
+                      value={formData.customer_address}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customer_address: e.target.value }))}
+                      error={errors.customer_address}
+                      multiline
+                      rows={3}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Order Details */}
+              <div>
+                <h3 className="text-lg font-bold mb-4">Order Details:</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">Order Number:</label>
+                    <Input
+                      name="order_number"
+                      value={formData.order_number}
+                      onChange={(e) => setFormData(prev => ({ ...prev, order_number: e.target.value }))}
+                      error={errors.order_number}
+                      className="w-full font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">Delivery Note:</label>
+                    <Input
+                      name="delivery_note"
+                      value={formData.delivery_note}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_note: e.target.value }))}
+                      error={errors.delivery_note}
+                      className="w-full font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">Contact Person:</label>
+                    <Input
+                      name="contact_person"
+                      value={formData.contact_person}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contact_person: e.target.value }))}
+                      error={errors.contact_person}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-1 text-gray-600">Contact Phone:</label>
+                    <Input
+                      name="contact_phone"
+                      value={formData.contact_phone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, contact_phone: e.target.value }))}
+                      error={errors.contact_phone}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <div className="mb-8">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border-b border-r border-gray-300 p-3 text-left font-bold">Code</th>
+                  <th className="border-b border-r border-gray-300 p-3 text-left font-bold">Description</th>
+                  <th className="border-b border-r border-gray-300 p-3 text-center font-bold w-24">Quantity</th>
+                  <th className="border-b border-r border-gray-300 p-3 text-center font-bold w-32">Unit Price</th>
+                  <th className="border-b border-r border-gray-300 p-3 text-center font-bold w-32">Amount</th>
+                  <th className="border-b border-gray-300 p-3 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {formData.items.map((item, index) => (
+                  <tr key={index} className="border-b border-gray-300">
+                    <td className="border-r border-gray-300 p-3">
+                      <Input
+                        value={item.code}
+                        onChange={(e) => handleItemChange(index, 'code', e.target.value)}
+                        error={errors[`items.${index}.code`]}
+                        placeholder="Item code"
+                        className="w-full font-mono text-sm"
+                      />
+                    </td>
+                    <td className="border-r border-gray-300 p-3">
+                      <Input
+                        value={item.description}
+                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                        error={errors[`items.${index}.description`]}
+                        placeholder="Item description"
+                        className="w-full"
+                      />
+                    </td>
+                    <td className="border-r border-gray-300 p-3">
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                        error={errors[`items.${index}.quantity`]}
+                        className="w-full text-right font-mono"
+                        min="0"
+                        step="1"
+                      />
+                    </td>
+                    <td className="border-r border-gray-300 p-3">
+                      <Input
+                        type="number"
+                        value={item.unit_price}
+                        onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
+                        error={errors[`items.${index}.unit_price`]}
+                        className="w-full text-right font-mono"
+                        min="0"
+                        step="0.01"
+                      />
+                    </td>
+                    <td className="border-r border-gray-300 p-3 text-right font-mono">
+                      R {((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
+                    </td>
+                    <td className="p-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Remove item"
+                      >
+                        <Icon icon="delete" className="w-5 h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Icon icon="add" className="w-5 h-5 mr-2" />
+              Add Item
+            </button>
+          </div>
+
+          {/* Totals and Banking Details */}
+          <div className="grid grid-cols-2 gap-8 mt-8">
+            {/* Left side - Banking Details */}
+            <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <h3 className="font-bold mb-4 text-lg text-gray-800">Banking Details</h3>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2">
+                  <p className="text-gray-600">Bank:</p>
+                  <p className="font-medium">{formData.bank_name}</p>
+                </div>
+                <div className="grid grid-cols-2">
+                  <p className="text-gray-600">Account Name:</p>
+                  <p className="font-medium">{formData.account_name}</p>
+                </div>
+                <div className="grid grid-cols-2">
+                  <p className="text-gray-600">Account Type:</p>
+                  <p className="font-medium">{formData.account_type}</p>
+                </div>
+                <div className="grid grid-cols-2">
+                  <p className="text-gray-600">Account Number:</p>
+                  <p className="font-medium font-mono">{formData.account_number}</p>
+                </div>
+                <div className="grid grid-cols-2">
+                  <p className="text-gray-600">Branch Code:</p>
+                  <p className="font-medium font-mono">{formData.branch_code}</p>
+                </div>
+                <div className="grid grid-cols-2">
+                  <p className="text-gray-600">Swift Code:</p>
+                  <p className="font-medium font-mono">{formData.swift_code}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right side - Totals */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-600">Subtotal:</span>
+                <span className="font-medium font-mono text-lg">
+                  R {calculateSubtotal().toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-600">VAT ({formData.vat_rate}%):</span>
+                <span className="font-medium font-mono text-lg">
+                  R {(calculateSubtotal() * (parseFloat(formData.vat_rate) / 100)).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-t-2 border-gray-300">
+                <span className="font-bold text-lg">Total:</span>
+                <span className="font-bold font-mono text-xl">
+                  R {(calculateSubtotal() * (1 + parseFloat(formData.vat_rate) / 100)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Note */}
+          <div className="mt-8 text-center text-gray-500 text-sm border-t border-gray-200 pt-4">
+            Thank you for your business!
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-8 flex justify-end space-x-4">
+            <Button type="button" onClick={onClose} variant="secondary">
+              Cancel
+            </Button>
+            <Button type="submit" loading={loading}>
+              {mode === 'create' ? 'Create Invoice' : 'Update Invoice'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+
+      if (mode === 'create') {
+        await createInvoice(invoiceData);
+      } else {
+        await updateInvoice(invoice.id, invoiceData);
+      }
+      onClose();
+    } catch (error) {
+      console.error('Failed to save invoice:', error);
+      setErrors({ submit: 'Failed to save invoice. Please try again.' });
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'job') {
+      if (value) {
+        setIsCustomerLocked(true);
+      } else {
+        setIsCustomerLocked(false);
+      }
+    }
+    if (name === 'job' && value) {
+      const selectedJob = jobs.find(j => String(j.id) === String(value));
+      if (selectedJob) {
+        setFormData(prev => ({
+          ...prev,
+          customer: selectedJob.customer,
+          vehicle_model: selectedJob.vehicle_model,
+          vehicle_plate: selectedJob.vehicle_plate
+        }));
+      }
+    }
+  };
+
+  const handleItemChange = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      )
+    }));
+    updateTotals();
+  };
+
+  const addItem = () => setFormData(prev => ({ 
+    ...prev, 
+    items: [
+      ...prev.items, 
+      {
+        code: '',
+        description: '',
+        quantity: '1',
+        unit: 'pcs',
+        unit_price: '',
+        discount: '0'
+      }
+    ] 
+  }));
+
+  const removeItem = (index) => { 
+    if (formData.items.length > 1) {
+      setFormData(prev => ({ 
+        ...prev, 
+        items: prev.items.filter((_, i) => i !== index) 
+      }));
+    }
+  };
+
+  const updateTotals = () => {
+    const subtotal = calculateSubtotal();
+    const vatRate = parseFloat(formData.vat_rate) || 15;
+    const vatAmount = subtotal * (vatRate / 100);
+    const totalAmount = subtotal + vatAmount;
+
+    setFormData(prev => ({
+      ...prev,
+      subtotal: subtotal.toFixed(2),
+      vat_amount: vatAmount.toFixed(2),
+      total_amount: totalAmount.toFixed(2)
+    }));
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (invoice && mode === 'edit') {
+      setFormData(prev => ({
+        ...prev,
+        invoice_number: invoice.invoice_number || prev.invoice_number,
+        customer: invoice.customer || '',
+        job: invoice.job || '',
+        date: invoice.date || prev.date,
+        payment_terms: invoice.payment_terms || 'CASH',
+        order_number: invoice.order_number || '',
+        company_vat_number: invoice.company_vat_number || '',
+        customer_vat_number: invoice.customer_vat_number || '',
+        contact_person: invoice.contact_person || '',
+        contact_number: invoice.contact_number || '',
+        delivery_address: invoice.delivery_address || '',
+        delivery_note: invoice.delivery_note || '',
+        bank_name: invoice.bank_name || '',
+        bank_branch: invoice.bank_branch || '',
+        bank_branch_code: invoice.bank_branch_code || '',
+        bank_account_name: invoice.bank_account_name || '',
+        bank_account_number: invoice.bank_account_number || '',
+        bank_swift_code: invoice.bank_swift_code || '',
+        items: invoice.items || []
+      }));
+    }
+  }, [isOpen, invoice, mode]);
+
+  // Effect to update totals when items or VAT rate changes
+  useEffect(() => {
+    if (formData.items.length > 0) {
+      updateTotals();
+    }
+  }, [formData.items, formData.vat_rate]);
+
+  // Early return if modal is closed
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4">
+        <div className="flex justify-between items-center p-4 border-b">
+          <h2 className="text-xl font-semibold">
+            {mode === 'create' ? 'Create New Invoice' : 'Edit Invoice'}
+          </h2>
+          <button onClick={onClose} className="p-2">
+            <Icon name="close" className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Invoice Details */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Invoice Number</label>
+              <Input
+                name="invoice_number"
+                value={formData.invoice_number}
+                onChange={handleInputChange}
+                error={errors.invoice_number}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Date</label>
+              <Input
+                type="date"
+                name="date"
+                value={formData.date}
+                onChange={handleInputChange}
+                error={errors.date}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Payment Terms</label>
+              <select
+                name="payment_terms"
+                value={formData.payment_terms}
+                onChange={handleInputChange}
+                className="modern-input"
+              >
+                <option value="CASH">Cash</option>
+                <option value="30_DAYS">30 Days</option>
+                <option value="60_DAYS">60 Days</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Order Number</label>
+              <Input
+                name="order_number"
+                value={formData.order_number}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            {/* Customer Information */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Customer</label>
+              <select
+                name="customer"
+                value={formData.customer}
+                onChange={handleInputChange}
+                disabled={isCustomerLocked}
+                className="modern-input"
+              >
+                <option value="">Select Customer</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+              {errors.customer && <p className="text-red-500 text-sm mt-1">{errors.customer}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">VAT Number</label>
+              <Input
+                name="customer_vat_number"
+                value={formData.customer_vat_number}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Contact Person</label>
+              <Input
+                name="contact_person"
+                value={formData.contact_person}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Contact Number</label>
+              <Input
+                name="contact_number"
+                value={formData.contact_number}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-sm font-medium mb-1">Delivery Address</label>
+              <textarea
+                name="delivery_address"
+                value={formData.delivery_address}
+                onChange={handleInputChange}
+                rows={2}
+                className="modern-input w-full"
+              />
+            </div>
+
+            {/* Bank Details */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Bank Name</label>
+              <Input
+                name="bank_name"
+                value={formData.bank_name}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Branch</label>
+              <Input
+                name="bank_branch"
+                value={formData.bank_branch}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Branch Code</label>
+              <Input
+                name="bank_branch_code"
+                value={formData.bank_branch_code}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Account Name</label>
+              <Input
+                name="bank_account_name"
+                value={formData.bank_account_name}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Account Number</label>
+              <Input
+                name="bank_account_number"
+                value={formData.bank_account_number}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">SWIFT Code</label>
+              <Input
+                name="bank_swift_code"
+                value={formData.bank_swift_code}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            {/* Invoice Items */}
+            <div className="col-span-2">
+              <h3 className="font-medium text-lg mb-4">Invoice Items</h3>
+              {formData.items.map((item, index) => (
+                <div key={index} className="grid grid-cols-6 gap-4 mb-4">
+                  <div className="col-span-1">
+                    <Input
+                      placeholder="Code"
+                      value={item.code}
+                      onChange={(e) => handleItemChange(index, 'code', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Quantity"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Unit"
+                      value={item.unit}
+                      onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Unit Price"
+                      value={item.unit_price}
+                      onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Discount %"
+                      value={item.discount}
+                      onChange={(e) => handleItemChange(index, 'discount', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Icon name="trash" className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addItem}
+                className="mt-2"
+              >
+                Add Item
+              </Button>
+            </div>
+
+            {/* Totals */}
+            <div className="col-span-2">
+              <div className="flex justify-end space-x-4">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Subtotal:</p>
+                  <p className="text-sm text-gray-600">VAT ({formData.vat_rate}%):</p>
+                  <p className="font-medium">Total:</p>
+                </div>
+                <div className="text-right min-w-[100px]">
+                  <p className="text-sm">{formData.subtotal}</p>
+                  <p className="text-sm">{formData.vat_amount}</p>
+                  <p className="font-medium">{formData.total_amount}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium mb-1">Notes</label>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleInputChange}
+                rows={4}
+                className="modern-input w-full"
+                placeholder="Additional notes, terms, or special instructions..."
+              />
+            </div>
+
+            <div className="col-span-2">
+              <div className="mt-4 text-sm text-gray-600">
+                <p>* All bank charges are for the account of the transferor</p>
+                <p>* Please use the invoice number as payment reference</p>
+                <p>* This invoice is valid for 30 days from the date of issue</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-8 flex justify-end space-x-4">
+            <Button type="button" onClick={onClose} variant="outline" className="px-4 py-2">
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="px-4 py-2"
+            >
+              {loading ? (
+                <>
+                  <Icon icon="loader" className="w-4 h-4 mr-2 animate-spin" />
+                  {mode === 'create' ? 'Creating...' : 'Updating...'}
+                </>
+              ) : (
+                <>
+                  <Icon icon="save" className="w-4 h-4 mr-2" />
+                  {mode === 'create' ? 'Create Invoice' : 'Update Invoice'}
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+};
+
+export default InvoiceModal;

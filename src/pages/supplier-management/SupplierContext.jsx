@@ -5,7 +5,7 @@ const getAuthToken = () => {
   try { return localStorage.getItem('token'); } catch (e) { return null; }
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 const SupplierContext = createContext();
 
@@ -34,6 +34,8 @@ export const SupplierProvider = ({ children }) => {
     });
     // Ensure numeric amount
     obj.amount = Number(obj.amount || 0);
+    // Ensure numeric amountPaid
+    obj.amountPaid = Number(obj.amountPaid || raw.amount_paid || 0);
     return obj;
   };
 
@@ -71,6 +73,10 @@ export const SupplierProvider = ({ children }) => {
       }
       out[snake] = val;
     });
+    // Add amount_paid if present
+    if (payload.amountPaid !== undefined) {
+      out['amount_paid'] = Number(payload.amountPaid);
+    }
     return out;
   };
 

@@ -56,6 +56,11 @@ const CustomerProfile = ({ customer, onSave, onEdit, onScheduleAppointment, onSe
             <div>
               <h2 className="text-xl font-heading-semibold text-text-primary">{customer.name}</h2>
               <p className="text-text-secondary">Customer ID: {customer.id}</p>
+              {/* Amount Paid and Due */}
+              <div className="flex flex-col mt-2">
+                <span className="text-sm text-text-secondary">Amount Paid: <span className="font-semibold text-success">{formatCurrency(customer.amount_received || customer.amountReceived || 0)}</span></span>
+                <span className="text-sm text-text-secondary">Amount Due: <span className="font-semibold text-error">{formatCurrency((customer.full_cost || customer.fullCost || 0) - (customer.amount_received || customer.amountReceived || 0))}</span></span>
+              </div>
             </div>
           </div>
           

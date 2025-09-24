@@ -1,4 +1,4 @@
-Django backend scaffold for Regimark Motors Control Center
+Django backend scaffold for Regimark Autoelectrics Control Center
 
 Setup (no virtualenv required):
 

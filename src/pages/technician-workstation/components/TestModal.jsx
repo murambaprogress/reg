@@ -12,7 +12,7 @@ const TestModal = ({ job, isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-modal p-4">
-      <div className="bg-white rounded-lg p-6 max-w-md">
+  <div className="bg-[var(--color-surface)] dark:bg-[var(--color-background)] text-[var(--color-text-primary)] dark:text-[var(--color-text-primary)] rounded-lg p-6 max-w-md">
         <h2 className="text-xl font-bold mb-4">Test Modal - Job Details</h2>
         <div className="mb-4 space-y-2">
           <p><strong>Job ID:</strong> {job.id || 'N/A'}</p>

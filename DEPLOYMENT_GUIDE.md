@@ -1,7 +1,7 @@
-# Regimark Motors Control Center - PythonAnywhere Deployment Guide
+# Regimark Autoelectrics Control Center - PythonAnywhere Deployment Guide
 
 ## Overview
-This guide will help you deploy the Regimark Motors Control Center to PythonAnywhere with the corrected email configuration and proper URL setup.
+This guide will help you deploy the Regimark Autoelectrics Control Center to PythonAnywhere with the corrected email configuration and proper URL setup.
 
 ## Prerequisites
 - PythonAnywhere account (username: Progress)

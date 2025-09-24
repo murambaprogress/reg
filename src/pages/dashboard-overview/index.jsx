@@ -21,7 +21,7 @@ const DashboardOverview = () => {
   // Billing context provides dynamic invoice-based cards already computed
   const { invoices, expenses, debtors, stats: billingStats, fetchInvoices, fetchExpenses, fetchDebtors } = useBilling();
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     const timer = setInterval(() => {

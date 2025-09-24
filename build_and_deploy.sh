@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build and Deploy Script for Regimark Motors Control Center
+# Build and Deploy Script for Regimark Autoelectrics Control Center
 # This script builds the frontend and prepares for deployment
 
 echo "🚀 Starting build and deployment process..."

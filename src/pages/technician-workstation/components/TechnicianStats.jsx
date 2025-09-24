@@ -12,7 +12,7 @@ const TechnicianStats = ({ stats, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     fetchDetailedStats();
@@ -150,7 +150,7 @@ const TechnicianStats = ({ stats, onRefresh }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Technician Performance */}
-        <div className="bg-surface rounded-lg border border-border overflow-hidden">
+  <div className="bg-[var(--color-surface)] dark:bg-[var(--color-background)] text-[var(--color-text-primary)] dark:text-[var(--color-text-primary)] rounded-lg border border-border overflow-hidden">
           <div className="px-6 py-4 border-b border-border">
             <h3 className="text-base font-body-semibold text-text-primary">Technician Performance</h3>
           </div>

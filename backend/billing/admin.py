@@ -1,7 +1,8 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import (
     Invoice, InvoiceItem, Payment, Expense, 
-    Debtor, DebtorContact, BillingStats
+    Debtor, DebtorPayment, BillingStats
 )
 
 
@@ -9,6 +10,7 @@ class InvoiceItemInline(admin.TabularInline):
     model = InvoiceItem
     extra = 1
     readonly_fields = ['total_price']
+    fields = ['code', 'description', 'unit', 'quantity', 'unit_price', 'discount', 'total_price']
 
 
 class PaymentInline(admin.TabularInline):
@@ -33,14 +35,22 @@ class InvoiceAdmin(admin.ModelAdmin):
     date_hierarchy = 'invoice_date'
     
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('invoice_number', 'customer', 'job')
+        ('Invoice Information', {
+            'fields': (
+                'invoice_number', 'invoice_date', 'due_date',
+                'order_number', 'delivery_note'
+            )
         }),
-        ('Vehicle Information', {
-            'fields': ('vehicle_model', 'vehicle_plate')
+        ('Customer Information', {
+            'fields': (
+                'customer', 'contact_person', 'contact_number',
+                'delivery_address', 'customer_vat_number'
+            )
         }),
-        ('Service Details', {
-            'fields': ('service_description',)
+        ('Job Details', {
+            'fields': (
+                'job', 'vehicle_model', 'vehicle_plate'
+            )
         }),
         ('Financial Details', {
             'fields': (
@@ -48,14 +58,20 @@ class InvoiceAdmin(admin.ModelAdmin):
                 'discount_amount', 'total_amount'
             )
         }),
-        ('Payment Information', {
-            'fields': ('status', 'payment_method', 'paid_date')
+        ('Payment Terms', {
+            'fields': (
+                'payment_terms', 'status'
+            )
         }),
-        ('Dates', {
-            'fields': ('invoice_date', 'due_date')
+        ('Bank Details', {
+            'fields': (
+                'bank_name', 'bank_account_name', 'bank_branch',
+                'bank_account_number', 'bank_branch_code', 'bank_swift_code'
+            ),
+            'classes': ('collapse',)
         }),
         ('Additional Information', {
-            'fields': ('notes', 'created_by'),
+            'fields': ('notes',),
             'classes': ('collapse',)
         }),
         ('Timestamps', {
@@ -68,11 +84,11 @@ class InvoiceAdmin(admin.ModelAdmin):
 @admin.register(InvoiceItem)
 class InvoiceItemAdmin(admin.ModelAdmin):
     list_display = [
-        'invoice', 'item_type', 'description', 'quantity', 
-        'unit_price', 'total_price'
+        'invoice', 'code', 'description', 'unit', 'quantity', 
+        'unit_price', 'discount', 'total_price'
     ]
-    list_filter = ['item_type']
-    search_fields = ['description', 'part_number', 'invoice__invoice_number']
+    list_filter = ['unit']
+    search_fields = ['code', 'description', 'invoice__invoice_number']
     readonly_fields = ['total_price']
 
 
@@ -129,43 +145,79 @@ class ExpenseAdmin(admin.ModelAdmin):
     )
 
 
-class DebtorContactInline(admin.TabularInline):
-    model = DebtorContact
-    extra = 0
+class DebtorPaymentInline(admin.TabularInline):
+    model = DebtorPayment
+    extra = 1
     readonly_fields = ['created_at']
 
 
 @admin.register(Debtor)
 class DebtorAdmin(admin.ModelAdmin):
     list_display = [
-        'customer', 'total_outstanding', 'days_overdue', 
-        'last_contact_date', 'contact_attempts', 'status'
+        'customer', 'get_debt_amount', 'status', 
+        'debt_date', 'due_date', 'get_payment_status'
     ]
-    list_filter = ['status', 'last_contact_date']
-    search_fields = ['customer__name', 'customer__phone', 'customer__email']
+    list_filter = ['status', 'debt_date', 'due_date']
+    search_fields = ['customer__name', 'customer__phone', 'customer__email', 'description']
     readonly_fields = ['created_at', 'updated_at']
-    inlines = [DebtorContactInline]
+    inlines = [DebtorPaymentInline]
     
-    actions = ['update_outstanding_amounts']
+    fieldsets = (
+        ('Debtor Information', {
+            'fields': ('customer', 'invoice', 'status')
+        }),
+        ('Amount Details', {
+            'fields': ('initial_amount', 'current_balance')
+        }),
+        ('Dates', {
+            'fields': ('debt_date', 'due_date')
+        }),
+        ('Additional Information', {
+            'fields': ('description', 'payment_terms', 'notes', 'created_by'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
     
-    def update_outstanding_amounts(self, request, queryset):
-        for debtor in queryset:
-            debtor.update_outstanding_amount()
-        self.message_user(request, f"Updated outstanding amounts for {queryset.count()} debtors.")
-    update_outstanding_amounts.short_description = "Update outstanding amounts"
+    def get_debt_amount(self, obj):
+        return format_html(
+            '<span style="color: {}">₦{:.2f} / ₦{:.2f}</span>',
+            'red' if obj.current_balance > 0 else 'green',
+            obj.current_balance,
+            obj.initial_amount
+        )
+    get_debt_amount.short_description = 'Balance / Initial'
+
+    def get_payment_status(self, obj):
+        if obj.current_balance == 0:
+            return format_html(
+                '<span style="color: green;">✔ Fully Paid</span>'
+            )
+        percentage = ((obj.initial_amount - obj.current_balance) / obj.initial_amount) * 100
+        return format_html(
+            '<span style="color: {};">{:.1f}% Paid</span>',
+            'orange' if percentage > 0 else 'red',
+            percentage
+        )
+    get_payment_status.short_description = 'Payment Status'
 
 
-@admin.register(DebtorContact)
-class DebtorContactAdmin(admin.ModelAdmin):
+@admin.register(DebtorPayment)
+class DebtorPaymentAdmin(admin.ModelAdmin):
     list_display = [
-        'debtor', 'contact_type', 'contact_date', 'outcome', 'contacted_by'
+        'debtor', 'amount_paid', 'payment_method', 
+        'payment_date', 'reference_number', 'received_by'
     ]
-    list_filter = ['contact_type', 'outcome', 'contact_date']
+    list_filter = ['payment_method', 'payment_date']
     search_fields = [
-        'debtor__customer__name', 'notes', 'contacted_by__username'
+        'debtor__customer__name', 'reference_number', 
+        'notes', 'received_by__username'
     ]
     readonly_fields = ['created_at']
-    date_hierarchy = 'contact_date'
+    date_hierarchy = 'payment_date'
 
 
 @admin.register(BillingStats)

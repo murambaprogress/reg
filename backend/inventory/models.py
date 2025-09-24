@@ -50,6 +50,8 @@ class Supplier(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    goods_supplier = models.CharField(max_length=200, blank=True)
     due_date = models.DateField(null=True, blank=True)
     state = models.CharField(max_length=50, default='due')
     products_supplied = models.TextField(blank=True)
@@ -73,6 +75,10 @@ class Customer(models.Model):
     join_date = models.DateTimeField(auto_now_add=True)
     last_service_date = models.DateTimeField(null=True, blank=True)
     total_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # new fields for frontend support
+    amount_received = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    inventory_sold = models.TextField(blank=True)  # store as JSON string
+    full_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     # simple JSON storage for related arrays (invoices, payments, vehicles)
     metadata = models.TextField(blank=True)
 

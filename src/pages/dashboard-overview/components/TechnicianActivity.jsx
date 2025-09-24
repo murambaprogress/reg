@@ -6,7 +6,7 @@ const TechnicianActivity = () => {
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     fetchTechnicians();

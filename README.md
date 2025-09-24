@@ -1,4 +1,4 @@
-# Regimark Motors Control Center
+# Regimark Autoelectrics Control Center
 
 A comprehensive automotive service management system built with Django REST Framework backend and React frontend.
 
@@ -214,7 +214,7 @@ npm test
 
 ## License
 
-This project is proprietary software for Regimark Motors.
+This project is proprietary software for Regimark Autoelectrics.
 
 ## Support
 

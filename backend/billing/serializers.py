@@ -1,15 +1,14 @@
 from rest_framework import serializers
-from .models import (
-    Invoice, InvoiceItem, Payment, Expense, 
-    Debtor, DebtorContact, BillingStats
-)
-from inventory.models import Customer
-from jobs.models import Job
-from jobs.models import PartsRequest
-from inventory.models import Part
 from django.utils import timezone
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
+from .models import (
+    Invoice, InvoiceItem, Payment, Expense, 
+    Debtor, DebtorPayment, DebtorContact, BillingStats
+)
+from inventory.models import Customer, Part
+from jobs.models import Job, PartsRequest
+import pandas as pd
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):
@@ -30,6 +29,103 @@ class PaymentSerializer(serializers.ModelSerializer):
             'reference_number', 'notes', 'created_at', 'recorded_by'
         ]
         read_only_fields = ['created_at']
+
+
+class DebtorPaymentListSerializer(serializers.ModelSerializer):
+    """Minimal serializer used in DebtorSerializer for displaying payments"""
+    class Meta:
+        model = DebtorPayment
+        fields = [
+            'id', 'amount_paid', 'payment_method', 'payment_date', 
+            'reference_number', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+
+
+class DebtorPaymentSerializer(serializers.ModelSerializer):
+    """Full serializer for managing debtor payments"""
+    debtor_name = serializers.CharField(source='debtor.customer.name', read_only=True)
+    received_by_name = serializers.CharField(source='received_by.username', read_only=True)
+
+    class Meta:
+        model = DebtorPayment
+        fields = [
+            'id', 'debtor', 'debtor_name', 'amount_paid', 'payment_method',
+            'payment_date', 'reference_number', 'notes', 'received_by',
+            'received_by_name', 'created_at'
+        ]
+        read_only_fields = ['received_by_name', 'created_at']
+
+    def create(self, validated_data):
+        # Ensure the logged-in user is set as received_by
+        validated_data['received_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class DebtorListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for debtor lists"""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
+    payment_progress = serializers.SerializerMethodField()
+    total_paid = serializers.DecimalField(read_only=True, max_digits=10, decimal_places=2)
+    last_payment_date = serializers.DateField(read_only=True)
+    days_due = serializers.SerializerMethodField()
+    days_due_calc = serializers.IntegerField(read_only=True)  # From queryset annotation
+    
+    class Meta:
+        model = Debtor
+        fields = [
+            'id', 'customer', 'customer_name', 'customer_phone', 'initial_amount',
+            'current_balance', 'debt_date', 'due_date', 'status', 'payment_terms',
+            'description', 'notes', 'payment_progress', 'total_paid', 
+            'last_payment_date', 'days_due', 'days_due_calc', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['current_balance', 'payment_progress', 'total_paid', 
+                           'last_payment_date', 'days_due', 'days_due_calc', 'created_at', 'updated_at']
+
+    def get_payment_progress(self, obj):
+        if obj.initial_amount == 0:
+            return 0
+        return ((obj.initial_amount - obj.current_balance) / obj.initial_amount) * 100
+    
+    def get_days_due(self, obj):
+        """Get days due using model property"""
+        return obj.days_due
+
+
+class DebtorSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        # Ensure current_balance is set to initial_amount if not provided
+        if 'current_balance' not in validated_data or validated_data['current_balance'] is None:
+            validated_data['current_balance'] = validated_data.get('initial_amount', 0)
+        return super().create(validated_data)
+    """Full serializer for managing debtors"""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True)
+    payments = DebtorPaymentListSerializer(many=True, read_only=True)
+    payment_progress = serializers.SerializerMethodField()
+    total_paid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    last_payment_date = serializers.DateField(read_only=True)
+    days_overdue = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Debtor
+        fields = [
+            'id', 'customer', 'customer_name', 'customer_phone', 'invoice',
+            'initial_amount', 'current_balance', 'debt_date', 'due_date',
+            'status', 'description', 'payment_terms', 'notes', 'created_by',
+            'created_by_name', 'created_at', 'updated_at', 'payments',
+            'payment_progress', 'total_paid', 'last_payment_date', 'days_overdue'
+        ]
+        read_only_fields = ['current_balance', 'created_at', 'updated_at', 'created_by',
+                         'created_by_name', 'payment_progress', 'total_paid',
+                         'last_payment_date', 'days_overdue']
+
+    def get_payment_progress(self, obj):
+        if obj.initial_amount == 0:
+            return 0
+        return ((obj.initial_amount - obj.current_balance) / obj.initial_amount) * 100
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -66,6 +162,7 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
     - Auto-populates customer, vehicle fields, service description from Job when missing
     - Generates an invoice_number if not supplied
     - Computes subtotal from generated items when subtotal not supplied
+    - Handles customer creation from frontend data
     """
     items = InvoiceItemSerializer(many=True, required=False, allow_null=True)
     # Read-only helper so frontend gets customer name after POST
@@ -73,12 +170,21 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
     customer_email = serializers.CharField(source='customer.email', read_only=True)
     
+    # Frontend customer data fields (write-only)
+    customer_company_name = serializers.CharField(write_only=True, required=False)
+    customer_address = serializers.CharField(write_only=True, required=False)
+    customer_city = serializers.CharField(write_only=True, required=False)
+    customer_phone_input = serializers.CharField(write_only=True, required=False)
+    customer_email_input = serializers.CharField(write_only=True, required=False)
+    
     class Meta:
         model = Invoice
         fields = [
             'invoice_number', 'customer', 'customer_name', 'customer_phone', 'customer_email',
             'job', 'vehicle_model', 'vehicle_plate', 'service_description', 'subtotal', 
-            'tax_rate', 'discount_amount', 'due_date', 'notes', 'items'
+            'tax_rate', 'discount_amount', 'due_date', 'notes', 'items',
+            'customer_company_name', 'customer_address', 'customer_city', 
+            'customer_phone_input', 'customer_email_input'
         ]
     
     def _generate_invoice_number(self):
@@ -92,6 +198,42 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         # Extract nested items if provided
         items_data = validated_data.pop('items', None)
         job = validated_data.get('job')
+        
+        # Extract customer data from frontend
+        customer_company_name = validated_data.pop('customer_company_name', None)
+        customer_address = validated_data.pop('customer_address', None)
+        customer_city = validated_data.pop('customer_city', None)
+        customer_phone_input = validated_data.pop('customer_phone_input', None)
+        customer_email_input = validated_data.pop('customer_email_input', None)
+
+        # Handle customer creation/selection
+        if not validated_data.get('customer') and customer_company_name:
+            # Create or get customer from frontend data
+            customer_data = {
+                'name': customer_company_name,
+                'phone': customer_phone_input or '',
+                'email': customer_email_input or '',
+                'address': f"{customer_address or ''} {customer_city or ''}".strip()
+            }
+            
+            # Try to find existing customer by name and phone/email
+            customer = None
+            if customer_phone_input:
+                customer = Customer.objects.filter(
+                    name=customer_company_name, 
+                    phone=customer_phone_input
+                ).first()
+            if not customer and customer_email_input:
+                customer = Customer.objects.filter(
+                    name=customer_company_name, 
+                    email=customer_email_input
+                ).first()
+            
+            # Create new customer if not found
+            if not customer:
+                customer = Customer.objects.create(**customer_data)
+            
+            validated_data['customer'] = customer
 
         # Auto-populate from job if provided
         if job:
@@ -201,10 +343,21 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
                 except InvalidOperation:
                     setattr(invoice, field, Decimal('0'))
 
-            # Trigger save to recalc tax_amount and total_amount
-            invoice.save()
+            # Calculate totals manually to avoid nested transaction issues
+            invoice.tax_amount = (invoice.subtotal * invoice.tax_rate) / 100
+            invoice.total_amount = invoice.subtotal + invoice.tax_amount - invoice.discount_amount
+
+            # Update the invoice without triggering the save method again
+            Invoice.objects.filter(pk=invoice.pk).update(
+                subtotal=invoice.subtotal,
+                tax_rate=invoice.tax_rate,
+                discount_amount=invoice.discount_amount,
+                tax_amount=invoice.tax_amount,
+                total_amount=invoice.total_amount
+            )
 
         return invoice
+
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -244,36 +397,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class DebtorContactSerializer(serializers.ModelSerializer):
-    contacted_by_name = serializers.CharField(source='contacted_by.username', read_only=True)
-    
-    class Meta:
-        model = DebtorContact
-        fields = [
-            'id', 'contact_type', 'contact_date', 'outcome', 'notes',
-            'follow_up_date', 'created_at', 'contacted_by', 'contacted_by_name'
-        ]
-        read_only_fields = ['created_at']
-
-
-class DebtorSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    customer_email = serializers.CharField(source='customer.email', read_only=True)
-    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
-    contact_history = DebtorContactSerializer(many=True, read_only=True)
-    
-    class Meta:
-        model = Debtor
-        fields = [
-            'id', 'customer', 'customer_name', 'customer_email', 
-            'customer_phone', 'total_outstanding', 'oldest_invoice_date',
-            'days_overdue', 'last_contact_date', 'contact_attempts',
-            'status', 'notes', 'created_at', 'updated_at', 'contact_history'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-
-
 class BillingStatsSerializer(serializers.ModelSerializer):
+
+
     class Meta:
         model = BillingStats
         fields = [
@@ -310,14 +436,167 @@ class ExpenseListSerializer(serializers.ModelSerializer):
         ]
 
 
-class DebtorListSerializer(serializers.ModelSerializer):
-    """Simplified serializer for debtor lists"""
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
+class DebtorContactSerializer(serializers.ModelSerializer):
+
+    """Serializer for debtor contact records"""
+    contacted_by_name = serializers.CharField(source='contacted_by.username', read_only=True)
     
     class Meta:
-        model = Debtor
+        model = DebtorContact
         fields = [
-            'id', 'customer_name', 'customer_phone', 'total_outstanding',
-            'days_overdue', 'last_contact_date', 'status'
+            'id', 'debtor', 'contact_type', 'contact_date', 'outcome',
+            'notes', 'follow_up_date', 'created_at', 'contacted_by',
+            'contacted_by_name'
         ]
+        read_only_fields = ['created_at', 'contacted_by_name']
+
+    def create(self, validated_data):
+        # Ensure the request user is set as contacted_by
+        if 'contacted_by' not in validated_data and 'request' in self.context:
+            validated_data['contacted_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class DebtorBulkImportSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+    def validate_file(self, value):
+        if not value.name.endswith(('.xlsx', '.xls', '.csv')):
+            raise serializers.ValidationError(
+                "Only Excel (.xlsx, .xls) and CSV files are supported."
+            )
+        return value
+
+    def create(self, validated_data):
+        file_obj = validated_data['file']
+        created_debtors = []
+
+        try:
+            # Load the file with pandas
+            if file_obj.name.endswith('.csv'):
+                df = pd.read_csv(file_obj)
+            else:
+                df = pd.read_excel(file_obj)
+
+            # Normalize column names for mapping
+            actual_columns = {str(col).strip().lower(): col for col in df.columns}
+
+            # Required and optional columns
+            required_mapping = {
+                'customer_name': ['customer_name', 'customer name', 'name', 'customer'],
+                'amount': ['amount', 'total_outstanding', 'total outstanding', 'balance', '$', 'value', 'total']
+            }
+            optional_mapping = {
+                'due_date': ['due_date', 'due date', 'date'],
+                'description': ['description', 'details', 'notes', 'particulars'],
+                'customer_phone': ['customer_phone', 'phone', 'customer phone']
+            }
+
+            mapped_required = {}
+            for target, candidates in required_mapping.items():
+                found = False
+                for name in candidates:
+                    key = name.lower()
+                    if key in actual_columns:
+                        mapped_required[target] = actual_columns[key]
+                        found = True
+                        break
+                if not found:
+                    raise serializers.ValidationError(
+                        f"Missing required column. Could not find any of: {', '.join(candidates)}"
+                    )
+
+            mapped_optional = {}
+            for target, candidates in optional_mapping.items():
+                for name in candidates:
+                    key = name.lower()
+                    if key in actual_columns:
+                        mapped_optional[target] = actual_columns[key]
+                        break
+
+            with transaction.atomic():
+                for _, row in df.iterrows():
+                    # Customer name
+                    customer_name_raw = row[mapped_required['customer_name']]
+                    customer_name = str(customer_name_raw).strip() if not pd.isna(customer_name_raw) else ''
+                    if not customer_name or customer_name.lower() == 'nan':
+                        continue  # skip empty rows
+
+                    # Amount parsing -> Decimal
+                    amount_raw = row[mapped_required['amount']]
+                    if pd.isna(amount_raw) or str(amount_raw).strip() == '':
+                        amount_dec = Decimal('0')
+                    else:
+                        amount_str = str(amount_raw)
+                        # Keep only digits, sign, and decimal separators
+                        amount_str = ''.join(c for c in amount_str if c.isdigit() or c in '.-,')
+                        # Handle different decimal separators (EU/US)
+                        if ',' in amount_str and '.' in amount_str:
+                            if amount_str.rindex(',') > amount_str.rindex('.'):
+                                amount_str = amount_str.replace('.', '')
+                                amount_str = amount_str.replace(',', '.')
+                            else:
+                                amount_str = amount_str.replace(',', '')
+                        elif ',' in amount_str and '.' not in amount_str:
+                            amount_str = amount_str.replace(',', '.')
+                        try:
+                            amount_dec = Decimal(amount_str)
+                        except Exception:
+                            amount_dec = Decimal('0')
+
+                    # Optional due_date with default +30 days
+                    due_date = None
+                    if 'due_date' in mapped_optional:
+                        due_raw = row.get(mapped_optional['due_date'])
+                        if not pd.isna(due_raw) and str(due_raw).strip() != '':
+                            try:
+                                due_date = pd.to_datetime(due_raw).date()
+                            except Exception:
+                                due_date = None
+                    if not due_date:
+                        due_date = timezone.now().date() + timezone.timedelta(days=30)
+
+                    # Optional description with sensible default
+                    description = f"Imported debtor for {customer_name}"
+                    if 'description' in mapped_optional:
+                        desc_raw = row.get(mapped_optional['description'])
+                        if not pd.isna(desc_raw) and str(desc_raw).strip() != '':
+                            description = str(desc_raw).strip()
+
+                    # Optional phone used when creating/updating customer
+                    phone_value = ''
+                    if 'customer_phone' in mapped_optional:
+                        phone_raw = row.get(mapped_optional['customer_phone'])
+                        if not pd.isna(phone_raw):
+                            phone_value = str(phone_raw).strip()
+                            if phone_value.lower() == 'nan':
+                                phone_value = ''
+
+                    # Create or get customer, update phone if available and empty
+                    customer, created = Customer.objects.get_or_create(
+                        name=customer_name,
+                        defaults={'phone': phone_value or '', 'email': '', 'address': ''}
+                    )
+                    if not created and phone_value and not customer.phone:
+                        customer.phone = phone_value
+                        customer.save(update_fields=['phone'])
+
+                    # Create debtor record
+                    debtor = Debtor.objects.create(
+                        customer=customer,
+                        initial_amount=amount_dec,
+                        current_balance=amount_dec,
+                        due_date=due_date,
+                        description=description,
+                        created_by=self.context['request'].user
+                    )
+                    created_debtors.append(debtor)
+
+            return created_debtors
+
+        except pd.errors.EmptyDataError:
+            raise serializers.ValidationError("The uploaded file is empty.")
+        except (pd.errors.ParserError, ValueError) as e:
+            raise serializers.ValidationError(f"Error parsing file: {str(e)}")
+        except Exception as e:
+            raise serializers.ValidationError(f"Error processing file: {str(e)}")

@@ -5,7 +5,7 @@ import { useSales } from '../SalesContext';
 import { useInventory } from '../../inventory-management/InventoryContext';
 import { useSuppliers } from '../../supplier-management/SupplierContext';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 const getAuthToken = () => { try { return localStorage.getItem('token'); } catch (e) { return null; } };
 

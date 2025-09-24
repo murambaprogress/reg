@@ -22,7 +22,7 @@ export const BillingProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {
@@ -114,6 +114,51 @@ export const BillingProvider = ({ children }) => {
       console.error('Error fetching debtors:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch debtor contacts
+  const fetchDebtorContacts = async (debtorId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/billing/debtors/${debtorId}/contacts/`, {
+        headers: getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch debtor contacts');
+      }
+      
+      const data = await response.json();
+      return data.results || data;
+    } catch (err) {
+      console.error('Error fetching debtor contacts:', err);
+      throw err;
+    }
+  };
+
+  // Add new contact record
+  const addDebtorContact = async (debtorId, contactData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/billing/debtors/${debtorId}/add_contact/`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(contactData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to add contact record');
+      }
+      
+      const data = await response.json();
+      // Refresh debtors list to get updated contact information
+      await fetchDebtors();
+      return data;
+    } catch (err) {
+      console.error('Error adding debtor contact:', err);
+      throw err;
     }
   };
 
@@ -345,7 +390,7 @@ export const BillingProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/billing/invoices/`, {
+  const response = await fetch(`${API_BASE_URL}/billing/invoices/`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(invoiceData),
@@ -639,6 +684,10 @@ export const BillingProvider = ({ children }) => {
     getExpense,
     markInvoicePaid,
     markExpensePaid,
+    
+    // Debtor Contact Management
+    fetchDebtorContacts,
+    addDebtorContact,
     
     // Utilities
     setError,

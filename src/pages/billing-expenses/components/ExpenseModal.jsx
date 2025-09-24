@@ -25,7 +25,7 @@ const ExpenseModal = ({ isOpen, onClose, expense = null, mode = 'create', expens
   });
   const [errors, setErrors] = useState({});
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {

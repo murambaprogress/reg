@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import MinValueValidator
+from decimal import Decimal
 from inventory.models import Customer
 from jobs.models import Job
 
@@ -14,6 +16,13 @@ class Invoice(models.Model):
         ('cancelled', 'Cancelled'),
     ]
     
+    PAYMENT_TERMS_CHOICES = [
+        ('CASH', 'CASH'),
+        ('30_DAYS', '30 DAYS'),
+        ('60_DAYS', '60 DAYS'),
+        ('90_DAYS', '90 DAYS'),
+    ]
+    
     PAYMENT_METHOD_CHOICES = [
         ('cash', 'Cash'),
         ('credit_card', 'Credit Card'),
@@ -22,19 +31,45 @@ class Invoice(models.Model):
         ('pending', 'Pending'),
     ]
 
-    # Invoice identification
+    # Invoice identification and basic details
     invoice_number = models.CharField(max_length=50, unique=True)
+    invoice_date = models.DateField(auto_now_add=True)
+    due_date = models.DateField(null=True, blank=True)
     
-    # Customer and job relationship
+    # Order information
+    order_number = models.CharField(max_length=50, blank=True)
+    delivery_note = models.CharField(max_length=50, blank=True)
+    
+    # Customer and contact details
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='invoices')
+    contact_person = models.CharField(max_length=100, blank=True)
+    contact_number = models.CharField(max_length=50, blank=True)
+    delivery_address = models.TextField(blank=True)
+    
+    # Job relationship
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='invoices', null=True, blank=True)
     
-    # Vehicle information (copied from job for record keeping)
+    # Vehicle information (if applicable)
     vehicle_model = models.CharField(max_length=200, blank=True)
     vehicle_plate = models.CharField(max_length=50, blank=True)
     
-    # Service details
-    service_description = models.TextField()
+    # Service description
+    service_description = models.TextField(blank=True)
+    
+    # Company Details
+    company_vat_number = models.CharField(max_length=50, blank=True)
+    customer_vat_number = models.CharField(max_length=50, blank=True)
+    
+    # Payment Terms and Status
+    payment_terms = models.CharField(max_length=20, choices=PAYMENT_TERMS_CHOICES, default='CASH')
+    
+    # Bank Details
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_account_name = models.CharField(max_length=100, blank=True)
+    bank_branch = models.CharField(max_length=100, blank=True)
+    bank_account_number = models.CharField(max_length=50, blank=True)
+    bank_branch_code = models.CharField(max_length=20, blank=True)
+    bank_swift_code = models.CharField(max_length=20, blank=True)
     
     # Financial details
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -66,11 +101,43 @@ class Invoice(models.Model):
         self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
         super().save(*args, **kwargs)
     
+    def update_totals(self):
+        """Recalculate invoice totals based on items"""
+        # Calculate subtotal from items
+        self.subtotal = sum(item.total_price for item in self.items.all())
+        
+        # Calculate tax
+        self.tax_amount = (self.subtotal * self.tax_rate / 100)
+        
+        # Calculate final total
+        self.total_amount = self.subtotal + self.tax_amount - self.discount_amount
+        
+        # Save without triggering the update_totals method again
+        type(self).objects.filter(pk=self.pk).update(
+            subtotal=self.subtotal,
+            tax_amount=self.tax_amount,
+            total_amount=self.total_amount
+        )
+    
+    def save(self, *args, **kwargs):
+        # Set due date based on payment terms if not set
+        if not self.due_date and self.payment_terms:
+            from datetime import timedelta
+            days = {
+                'CASH': 0,
+                '30_DAYS': 30,
+                '60_DAYS': 60,
+                '90_DAYS': 90
+            }.get(self.payment_terms, 0)
+            self.due_date = self.invoice_date + timedelta(days=days)
+        
+        super().save(*args, **kwargs)
+    
     def __str__(self):
         return f"Invoice {self.invoice_number} - {self.customer.name} - ${self.total_amount}"
     
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-invoice_date']
 
 
 class InvoiceItem(models.Model):
@@ -82,19 +149,37 @@ class InvoiceItem(models.Model):
         ('other', 'Other'),
     ]
     
+    UNIT_CHOICES = [
+        ('pcs', 'Pieces'),
+        ('m', 'Meters'),
+        ('kg', 'Kilograms'),
+        ('hr', 'Hours'),
+        ('lot', 'Lot'),
+        ('set', 'Set'),
+    ]
+    
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='items')
     item_type = models.CharField(max_length=20, choices=ITEM_TYPE_CHOICES, default='service')
+    code = models.CharField(max_length=50, blank=True)
     description = models.CharField(max_length=255)
+    part_number = models.CharField(max_length=100, blank=True)
+    unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default='pcs')
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Percentage
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
     
-    # Reference to parts if applicable
-    part_number = models.CharField(max_length=100, blank=True)
-    
     def save(self, *args, **kwargs):
-        self.total_price = self.quantity * self.unit_price
+        # Calculate price after discount
+        base_price = Decimal(self.quantity) * Decimal(self.unit_price)
+        discount_rate = Decimal(self.discount) / Decimal(100)
+        discount_amount = base_price * discount_rate
+        self.total_price = base_price - discount_amount
         super().save(*args, **kwargs)
+
+        # Update invoice totals
+        if self.invoice:
+            self.invoice.update_totals()
     
     def __str__(self):
         return f"{self.description} - {self.quantity} x ${self.unit_price}"
@@ -203,61 +288,6 @@ class Expense(models.Model):
         ordering = ['-expense_date']
 
 
-class Debtor(models.Model):
-    """Customers with outstanding payments"""
-    customer = models.OneToOneField(Customer, on_delete=models.CASCADE, related_name='debtor_profile')
-    total_outstanding = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    oldest_invoice_date = models.DateField(null=True, blank=True)
-    days_overdue = models.IntegerField(default=0)
-    
-    # Contact attempts
-    last_contact_date = models.DateField(null=True, blank=True)
-    contact_attempts = models.IntegerField(default=0)
-    
-    # Status and notes
-    status = models.CharField(max_length=50, default='active')  # active, payment_plan, legal, resolved
-    notes = models.TextField(blank=True)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    def update_outstanding_amount(self):
-        """Recalculate debtor fields including draft invoices.
-        Unpaid statuses now include draft, sent, overdue.
-        Mirrors logic in signals to keep consistency when manually refreshed (admin action/API).
-        """
-        from django.db.models import Sum
-        from django.utils import timezone
-
-        unpaid_statuses = ['draft', 'sent', 'overdue']
-        qs_unpaid = self.customer.invoices.filter(status__in=unpaid_statuses)
-        self.total_outstanding = qs_unpaid.aggregate(total=Sum('total_amount'))['total'] or 0
-        self.oldest_invoice_date = qs_unpaid.order_by('invoice_date').values_list('invoice_date', flat=True).first()
-        earliest_due = qs_unpaid.order_by('due_date').values_list('due_date', flat=True).first()
-        if earliest_due:
-            self.days_overdue = max((timezone.now().date() - earliest_due).days, 0)
-        else:
-            self.days_overdue = 0
-
-        # Status determination
-        if self.total_outstanding > 0:
-            if earliest_due and earliest_due < timezone.now().date():
-                self.status = 'overdue'
-            else:
-                self.status = 'due'
-        else:
-            self.status = 'paid'
-
-        self.save()
-    
-    def __str__(self):
-        return f"{self.customer.name} - Outstanding: ${self.total_outstanding}"
-    
-    class Meta:
-        ordering = ['-total_outstanding']
-
-
 class DebtorContact(models.Model):
     """Track contact attempts with debtors"""
     CONTACT_TYPE_CHOICES = [
@@ -278,7 +308,7 @@ class DebtorContact(models.Model):
         ('refused', 'Refused to Pay'),
     ]
     
-    debtor = models.ForeignKey(Debtor, on_delete=models.CASCADE, related_name='contact_history')
+    debtor = models.ForeignKey('billing.Debtor', on_delete=models.CASCADE, related_name='contact_history')
     contact_type = models.CharField(max_length=20, choices=CONTACT_TYPE_CHOICES)
     contact_date = models.DateField()
     outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES)
@@ -327,3 +357,113 @@ class BillingStats(models.Model):
     
     class Meta:
         ordering = ['-stat_date']
+
+
+class Debtor(models.Model):
+    """Model for tracking customers with outstanding payments"""
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('paid', 'Paid'),
+        ('defaulted', 'Defaulted'),
+        ('payment_plan', 'Payment Plan'),
+    ]
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='debts')
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='debtor_records', null=True, blank=True)
+    
+    initial_amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    
+    debt_date = models.DateField(auto_now_add=True)
+    due_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    
+    description = models.TextField(help_text="Description of services or goods provided")
+    payment_terms = models.TextField(blank=True, help_text="Agreed payment terms and conditions")
+    
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    @property
+    def days_due(self):
+        """Calculate days remaining until due date (negative if overdue)"""
+        from datetime import date
+        today = date.today()
+        delta = self.due_date - today
+        return delta.days
+    
+    @property
+    def is_overdue(self):
+        """Check if the debt is overdue"""
+        return self.days_due < 0
+    
+    def get_total_paid(self):
+        """Calculate total amount paid from payments"""
+        return self.payments.aggregate(total=models.Sum('amount_paid'))['total'] or Decimal('0')
+    
+    @property
+    def total_paid(self):
+        """Get total amount paid - can be overridden by annotation"""
+        # Check if this was set by annotation (from queryset)
+        if hasattr(self, '_total_paid_annotation'):
+            return self._total_paid_annotation or Decimal('0')
+        # Otherwise calculate from related payments
+        return self.get_total_paid()
+    
+    def __setattr__(self, name, value):
+        """Override setattr to handle total_paid annotation"""
+        if name == 'total_paid':
+            # Store annotated value in a private attribute
+            self._total_paid_annotation = Decimal(str(value)) if value is not None else Decimal('0')
+        else:
+            super().__setattr__(name, value)
+    
+    def save(self, *args, **kwargs):
+        # Update status based on current balance
+        if self.current_balance <= 0:
+            self.status = 'paid'
+        elif self.is_overdue and self.status == 'active':
+            self.status = 'defaulted'
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.customer.name} - ${self.current_balance} ({self.status})"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+class DebtorPayment(models.Model):
+    """Model for tracking payments made by debtors"""
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('check', 'Check'),
+        ('mobile_money', 'Mobile Money'),
+    ]
+
+    debtor = models.ForeignKey(Debtor, on_delete=models.CASCADE, related_name='payments')
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    
+    payment_date = models.DateField()
+    reference_number = models.CharField(max_length=100, blank=True, help_text="Payment reference number or receipt number")
+    
+    notes = models.TextField(blank=True)
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Update the debtor's current balance when payment is made
+        if not self.pk:  # Only on new payment creation
+            self.debtor.current_balance -= self.amount_paid
+            self.debtor.save()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Payment of ${self.amount_paid} by {self.debtor.customer.name}"
+    
+    class Meta:
+        ordering = ['-payment_date']

@@ -44,7 +44,23 @@ def supplier_detail(request, pk):
                        status=status.HTTP_403_FORBIDDEN)
     
     if request.method == 'PATCH':
-        serializer = SupplierSerializer(supplier, data=request.data, partial=True)
+        # Support pay all logic via ?pay_all=1 param or explicit field
+        pay_all = request.GET.get('pay_all') == '1' or request.data.get('pay_all') == True
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if pay_all:
+            data['amount_paid'] = supplier.amount
+        # If amount_paid is set, check if it clears the supplier
+        amount_paid = data.get('amount_paid', None)
+        amount = data.get('amount', None)
+        # Use new value if present, else fallback to existing
+        try:
+            amt_paid_val = float(amount_paid) if amount_paid is not None else float(supplier.amount_paid)
+            amt_val = float(amount) if amount is not None else float(supplier.amount)
+            if amt_paid_val >= amt_val:
+                data['state'] = 'cleared'
+        except Exception:
+            pass
+        serializer = SupplierSerializer(supplier, data=data, partial=True)
         if serializer.is_valid():
             supplier = serializer.save()
             return Response(SupplierSerializer(supplier).data)

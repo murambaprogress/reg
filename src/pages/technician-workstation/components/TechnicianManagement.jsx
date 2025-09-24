@@ -16,7 +16,7 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
     confirmPassword: ''
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
     fetchTechnicians();
@@ -176,7 +176,7 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
       )}
 
       {/* Technicians Table */}
-      <div className="bg-surface rounded-lg border border-border overflow-hidden">
+  <div className="bg-[var(--color-surface)] dark:bg-[var(--color-background)] text-[var(--color-text-primary)] dark:text-[var(--color-text-primary)] rounded-lg border border-border overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
           <h3 className="text-base font-body-semibold text-text-primary">All Technicians</h3>
         </div>

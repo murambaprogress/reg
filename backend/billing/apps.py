@@ -6,5 +6,6 @@ class BillingConfig(AppConfig):
     name = 'billing'
 
     def ready(self):
-        # Import signal handlers
+        # Import signal handlers and models
         from . import signals  # noqa
+        from . import models  # noqa

@@ -1,0 +1,1781 @@
+import React, { useState } from 'react';import React, { useState } from 'react';import React, { useState } from "react";import React, { useState } from "react";import React, { useState, useEffect } from 'react';
+
+import Icon from '../../../components/AppIcon';
+
+import Button from '../../../components/ui/Button';import { AppIcon } from '../../../components/AppIcon';
+
+import Input from '../../../components/ui/Input';
+
+import { useBilling } from '../BillingContext';import { Button } from '../../../components/Button';import { AppIcon } from "../../../components/AppIcon";
+
+
+
+const InvoiceModal = ({ isOpen, onClose, initialData = {}, onSubmit }) => {import { Input } from '../../../components/Input';
+
+  const [formData, setFormData] = useState({
+
+    // Company detailsimport { Modal } from '../../../components/Modal';import { Button } from "../../../components/Button";import { AppIcon } from "../../../components/AppIcon";import Icon from '../../../components/AppIcon';
+
+    companyName: "SOLTAM STEEL SOLUTIONS",
+
+    companyRegistration: "2016/039822/07",
+
+    companyVatNumber: "4280275392",
+
+    companyAddress1: "3A Blades Street, Industria West",export const InvoiceModal = ({import { Input } from "../../../components/Input";
+
+    companyAddress2: "Johannesburg, 2093",
+
+    companyPhone: "011 473 5614",  visible,
+
+    companyEmail: "accounts@soltamsteel.co.za",
+
+    companyWebsite: "www.soltamsteel.co.za",  close,import { Modal } from "../../../components/Modal";import { Button } from "../../../components/Button";import Button from '../../../components/ui/Button';
+
+    
+
+    // Invoice details  initialData = {},
+
+    invoiceNumber: "",
+
+    date: new Date().toISOString().split("T")[0],  onSubmit,
+
+    customerName: "",
+
+    customerAddress: "",}) => {
+
+    customerPhone: "",
+
+    customerEmail: "",  const [formData, setFormData] = useState({export const InvoiceModal = ({import { Input } from "../../../components/Input";import Input from '../../../components/ui/Input';
+
+    customerVatNumber: "",
+
+        companyName: "SOLTAM STEEL SOLUTIONS",
+
+    // Items
+
+    items: [    companyRegistration: "2016/039822/07",  visible,
+
+      {
+
+        id: Date.now(),    companyVatNumber: "4280275392",
+
+        code: "",
+
+        description: "",    companyAddress1: "3A Blades Street, Industria West",  close,import { Modal } from "../../../components/Modal";import { useBilling } from '../BillingContext';
+
+        quantity: "",
+
+        unitPrice: "",    companyAddress2: "Johannesburg, 2093",
+
+        total: 0,
+
+      },    companyPhone: "011 473 5614",  initialData = {},
+
+    ],
+
+        companyEmail: "accounts@soltamsteel.co.za",
+
+    // Totals
+
+    subtotal: 0,    companyWebsite: "www.soltamsteel.co.za",  onSubmit,
+
+    vatPercentage: 15,
+
+    vatAmount: 0,    invoiceNumber: "",
+
+    grandTotal: 0,
+
+        date: new Date().toISOString().split("T")[0],}) => {
+
+    // Payment details
+
+    bankName: "FIRST NATIONAL BANK",    customerName: "",
+
+    accountName: "SOLTAM STEEL SOLUTIONS (PTY) LTD",
+
+    accountNumber: "62758070728",    customerAddress: "",  const [formData, setFormData] = useState({export const InvoiceModal = ({const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = 'create' }) => {
+
+    branchCode: "250655",
+
+    branchName: "Parktown",    customerPhone: "",
+
+    reference: "",
+
+        customerEmail: "",    // Company details
+
+    ...initialData,
+
+  });    customerVatNumber: "",
+
+
+
+  const validateForm = () => {    items: [    companyName: "SOLTAM STEEL SOLUTIONS",  visible,  const { createInvoice, updateInvoice, loading } = useBilling();
+
+    // Simple validation
+
+    if (!formData.customerName) {      {
+
+      alert("Please enter customer name");
+
+      return false;        id: Date.now(),    companyRegistration: "2016/039822/07",
+
+    }
+
+            code: "",
+
+    // Validate all items have description and values
+
+    for (const item of formData.items) {        description: "",    companyVatNumber: "4280275392",  close,  const [customers, setCustomers] = useState([]);
+
+      if (!item.description || !item.quantity || !item.unitPrice) {
+
+        alert("Please complete all item details");        quantity: "",
+
+        return false;
+
+      }        unitPrice: "",    companyAddress1: "3A Blades Street, Industria West",
+
+    }
+
+            total: 0,
+
+    return true;
+
+  };      },    companyAddress2: "Johannesburg, 2093",  initialData = {},  const [jobs, setJobs] = useState([]);
+
+
+
+  const handleInputChange = (e) => {    ],
+
+    const { name, value } = e.target;
+
+    setFormData({    subtotal: 0,    companyPhone: "011 473 5614",
+
+      ...formData,
+
+      [name]: value,    vatPercentage: 15,
+
+    });
+
+  };    vatAmount: 0,    companyEmail: "accounts@soltamsteel.co.za",  onSubmit,  const [isCustomerLocked, setIsCustomerLocked] = useState(false);
+
+
+
+  const handleItemChange = (index, field, value) => {    grandTotal: 0,
+
+    const updatedItems = [...formData.items];
+
+    updatedItems[index][field] = value;    bankName: "FIRST NATIONAL BANK",    companyWebsite: "www.soltamsteel.co.za",
+
+    
+
+    // Calculate item total    accountName: "SOLTAM STEEL SOLUTIONS (PTY) LTD",
+
+    if (field === "quantity" || field === "unitPrice") {
+
+      const quantity = parseFloat(updatedItems[index].quantity) || 0;    accountNumber: "62758070728",    }) => {  const [errors, setErrors] = useState({});
+
+      const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;
+
+      updatedItems[index].total = quantity * unitPrice;    branchCode: "250655",
+
+    }
+
+        branchName: "Parktown",    // Invoice details
+
+    // Update form data with new items
+
+    setFormData({    reference: "",
+
+      ...formData,
+
+      items: updatedItems,    ...initialData,    invoiceNumber: "",  const [formData, setFormData] = useState({  const [formData, setFormData] = useState({
+
+    }, () => calculateTotals());
+
+  };  });
+
+
+
+  const calculateTotals = () => {    date: new Date().toISOString().split("T")[0],
+
+    const subtotal = formData.items.reduce(
+
+      (sum, item) => sum + (parseFloat(item.total) || 0),  const handleSubmit = (e) => {
+
+      0
+
+    );    e.preventDefault();    customerName: "",    // Company details    invoice_number: '',
+
+    
+
+    const vatAmount = (subtotal * formData.vatPercentage) / 100;    onSubmit && onSubmit(formData);
+
+    const grandTotal = subtotal + vatAmount;
+
+        close();    customerAddress: "",
+
+    setFormData({
+
+      ...formData,  };
+
+      subtotal,
+
+      vatAmount,    customerPhone: "",    companyName: "SOLTAM STEEL SOLUTIONS",    customer: '',
+
+      grandTotal,
+
+    });  return (
+
+  };
+
+    <Modal    customerEmail: "",
+
+  const addItem = () => {
+
+    setFormData({      title="Invoice"
+
+      ...formData,
+
+      items: [      visible={visible}    customerVatNumber: "",    companyRegistration: "2016/039822/07",    job: '',
+
+        ...formData.items,
+
+        {      onClose={close}
+
+          id: Date.now(),
+
+          code: "",      width="1100px"    
+
+          description: "",
+
+          quantity: "",      footer={
+
+          unitPrice: "",
+
+          total: 0,        <div className="flex justify-end gap-2">    // Items    companyVatNumber: "4280275392",    date: new Date().toISOString().split('T')[0],
+
+        },
+
+      ],          <Button onClick={close} variant="outlined">Cancel</Button>
+
+    });
+
+  };          <Button onClick={handleSubmit} type="submit">Save Invoice</Button>    items: [
+
+
+
+  const removeItem = (index) => {        </div>
+
+    const updatedItems = [...formData.items];
+
+    updatedItems.splice(index, 1);      }      {    companyAddress1: "3A Blades Street, Industria West",    payment_terms: 'CASH',
+
+    
+
+    setFormData({    >
+
+      ...formData,
+
+      items: updatedItems,      <form onSubmit={handleSubmit} className="p-4">        id: Date.now(),
+
+    }, () => calculateTotals());
+
+  };        <div className="bg-blue-50 p-4 mb-6 border border-blue-200 rounded">
+
+
+
+  const handleSubmit = (e) => {          <div className="flex justify-between">        code: "",    companyAddress2: "Johannesburg, 2093",    order_number: '',
+
+    e.preventDefault();
+
+                <div>
+
+    if (validateForm()) {
+
+      // Call the parent component's onSubmit function              <h1 className="text-3xl font-bold text-blue-800">{formData.companyName}</h1>        description: "",
+
+      onSubmit && onSubmit(formData);
+
+      onClose();              <p className="text-sm">Registration: {formData.companyRegistration}</p>
+
+    }
+
+  };              <p className="text-sm">VAT Number: {formData.companyVatNumber}</p>        quantity: "",    companyPhone: "011 473 5614",    company_vat_number: '',
+
+
+
+  if (!isOpen) return null;              <p className="text-sm">{formData.companyAddress1}</p>
+
+
+
+  return (              <p className="text-sm">{formData.companyAddress2}</p>        unitPrice: "",
+
+    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-5xl max-h-[90vh] overflow-auto">              <p className="text-sm">Tel: {formData.companyPhone}</p>
+
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+
+          <h2 className="text-xl font-semibold">Invoice</h2>              <p className="text-sm">Email: {formData.companyEmail}</p>        total: 0,    companyEmail: "accounts@soltamsteel.co.za",    customer_vat_number: '',
+
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+
+            <Icon icon="x" size={24} />              <p className="text-sm">Web: {formData.companyWebsite}</p>
+
+          </button>
+
+        </div>            </div>      },
+
+
+
+        <form onSubmit={handleSubmit} className="p-4">            <div className="text-right">
+
+          {/* Company Header */}
+
+          <div className="bg-blue-50 p-4 mb-6 border border-blue-200 rounded">              <h2 className="text-2xl font-bold text-blue-800">TAX INVOICE</h2>    ],    companyWebsite: "www.soltamsteel.co.za",    contact_person: '',
+
+            <div className="flex justify-between">
+
+              <div>              <div className="mt-4">
+
+                <h1 className="text-3xl font-bold text-blue-800">{formData.companyName}</h1>
+
+                <p className="text-sm">Registration: {formData.companyRegistration}</p>                <Input label="Invoice Number" name="invoiceNumber" value={formData.invoiceNumber} required />    
+
+                <p className="text-sm">VAT Number: {formData.companyVatNumber}</p>
+
+                <p className="text-sm">{formData.companyAddress1}</p>                <Input label="Date" name="date" type="date" value={formData.date} required />
+
+                <p className="text-sm">{formData.companyAddress2}</p>
+
+                <p className="text-sm">Tel: {formData.companyPhone}</p>              </div>    // Totals        contact_number: '',
+
+                <p className="text-sm">Email: {formData.companyEmail}</p>
+
+                <p className="text-sm">Web: {formData.companyWebsite}</p>            </div>
+
+              </div>
+
+              <div className="text-right">          </div>    subtotal: 0,
+
+                <h2 className="text-2xl font-bold text-blue-800">TAX INVOICE</h2>
+
+                <div className="mt-4">        </div>
+
+                  <Input
+
+                    label="Invoice Number"      </form>    vatPercentage: 15,    // Invoice details    delivery_address: '',
+
+                    name="invoiceNumber"
+
+                    value={formData.invoiceNumber}    </Modal>
+
+                    onChange={handleInputChange}
+
+                    required  );    vatAmount: 0,
+
+                  />
+
+                  <Input};
+
+                    label="Date"    grandTotal: 0,    invoiceNumber: "",    delivery_note: '',
+
+                    name="date"
+
+                    type="date"    
+
+                    value={formData.date}
+
+                    onChange={handleInputChange}    // Payment details    date: new Date().toISOString().split("T")[0],    bank_name: '',
+
+                    required
+
+                  />    bankName: "FIRST NATIONAL BANK",
+
+                </div>
+
+              </div>    accountName: "SOLTAM STEEL SOLUTIONS (PTY) LTD",    customerName: "",    bank_branch: '',
+
+            </div>
+
+          </div>    accountNumber: "62758070728",
+
+          
+
+          {/* Customer Details */}    branchCode: "250655",    customerAddress: "",    bank_branch_code: '',
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+
+            <div>    branchName: "Parktown",
+
+              <h3 className="font-bold mb-2">Bill To:</h3>
+
+              <Input    reference: "",    customerPhone: "",    bank_account_name: '',
+
+                label="Customer Name"
+
+                name="customerName"    
+
+                value={formData.customerName}
+
+                onChange={handleInputChange}    ...initialData,    customerEmail: "",    bank_account_number: '',
+
+                required
+
+              />  });
+
+              <Input
+
+                label="Customer Address"    customerVatNumber: "",    bank_swift_code: '',
+
+                name="customerAddress"
+
+                value={formData.customerAddress}  const validateForm = () => {
+
+                onChange={handleInputChange}
+
+              />    // Simple validation        items: [],
+
+              <Input
+
+                label="Phone"    if (!formData.customerName) {
+
+                name="customerPhone"
+
+                value={formData.customerPhone}      alert("Please enter customer name");    // Items    subtotal: '0',
+
+                onChange={handleInputChange}
+
+              />      return false;
+
+              <Input
+
+                label="Email"    }    items: [    vat_rate: '15',
+
+                name="customerEmail"
+
+                value={formData.customerEmail}    
+
+                onChange={handleInputChange}
+
+              />    // Validate all items have description and values      {    vat_amount: '0',
+
+              <Input
+
+                label="VAT Number"    for (const item of formData.items) {
+
+                name="customerVatNumber"
+
+                value={formData.customerVatNumber}      if (!item.description || !item.quantity || !item.unitPrice) {        id: Date.now(),    total_amount: '0',
+
+                onChange={handleInputChange}
+
+              />        alert("Please complete all item details");
+
+            </div>
+
+            <div>        return false;        code: "",    notes: ''
+
+              <h3 className="font-bold mb-2">Reference:</h3>
+
+              <Input      }
+
+                label="Reference"
+
+                name="reference"    }        description: "",  });
+
+                value={formData.reference}
+
+                onChange={handleInputChange}    
+
+              />
+
+            </div>    return true;        quantity: "",
+
+          </div>
+
+            };
+
+          {/* Items Table */}
+
+          <div className="mb-6">        unitPrice: "",  const calculateSubtotal = () => {
+
+            <h3 className="font-bold mb-2">Items:</h3>
+
+            <div className="overflow-x-auto">  const handleInputChange = (e) => {
+
+              <table className="min-w-full bg-white border border-gray-300">
+
+                <thead>    const { name, value } = e.target;        total: 0,    return formData.items.reduce((acc, item) => {
+
+                  <tr className="bg-gray-100">
+
+                    <th className="py-2 px-4 border-b border-gray-300 text-left">Code</th>    setFormData({
+
+                    <th className="py-2 px-4 border-b border-gray-300 text-left">Description</th>
+
+                    <th className="py-2 px-4 border-b border-gray-300 text-left">Quantity</th>      ...formData,      },      const quantity = parseFloat(item.quantity) || 0;
+
+                    <th className="py-2 px-4 border-b border-gray-300 text-left">Unit Price</th>
+
+                    <th className="py-2 px-4 border-b border-gray-300 text-left">Total</th>      [name]: value,
+
+                    <th className="py-2 px-4 border-b border-gray-300"></th>
+
+                  </tr>    });    ],      const unitPrice = parseFloat(item.unit_price) || 0;
+
+                </thead>
+
+                <tbody>  };
+
+                  {formData.items.map((item, index) => (
+
+                    <tr key={item.id}>          const discount = parseFloat(item.discount) || 0;
+
+                      <td className="py-2 px-4 border-b border-gray-300">
+
+                        <Input  const handleItemChange = (index, field, value) => {
+
+                          name={`item-${index}-code`}
+
+                          value={item.code}    const updatedItems = [...formData.items];    // Totals      return acc + (quantity * unitPrice * (1 - discount / 100));
+
+                          onChange={(e) => handleItemChange(index, "code", e.target.value)}
+
+                        />    updatedItems[index][field] = value;
+
+                      </td>
+
+                      <td className="py-2 px-4 border-b border-gray-300">        subtotal: 0,    }, 0);
+
+                        <Input
+
+                          name={`item-${index}-description`}    // Calculate item total
+
+                          value={item.description}
+
+                          onChange={(e) => handleItemChange(index, "description", e.target.value)}    if (field === "quantity" || field === "unitPrice") {    vatPercentage: 15,  };
+
+                          required
+
+                        />      const quantity = parseFloat(updatedItems[index].quantity) || 0;
+
+                      </td>
+
+                      <td className="py-2 px-4 border-b border-gray-300">      const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;    vatAmount: 0,
+
+                        <Input
+
+                          name={`item-${index}-quantity`}      updatedItems[index].total = quantity * unitPrice;
+
+                          value={item.quantity}
+
+                          type="number"    }    grandTotal: 0,  const validateForm = () => {
+
+                          onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+
+                          required    
+
+                        />
+
+                      </td>    // Update form data with new items        const newErrors = {};
+
+                      <td className="py-2 px-4 border-b border-gray-300">
+
+                        <Input    setFormData({
+
+                          name={`item-${index}-unitPrice`}
+
+                          value={item.unitPrice}      ...formData,    // Payment details    if (!formData.customer) newErrors.customer = 'Customer is required';
+
+                          type="number"
+
+                          onChange={(e) => handleItemChange(index, "unitPrice", e.target.value)}      items: updatedItems,
+
+                          required
+
+                        />    }, () => calculateTotals());    bankName: "FIRST NATIONAL BANK",    if (!formData.invoice_number) newErrors.invoice_number = 'Invoice number is required';
+
+                      </td>
+
+                      <td className="py-2 px-4 border-b border-gray-300">  };
+
+                        R {(parseFloat(item.quantity || 0) * parseFloat(item.unitPrice || 0)).toFixed(2)}
+
+                      </td>    accountName: "SOLTAM STEEL SOLUTIONS (PTY) LTD",    if (!formData.date) newErrors.date = 'Date is required';
+
+                      <td className="py-2 px-4 border-b border-gray-300">
+
+                        {formData.items.length > 1 && (  const calculateTotals = () => {
+
+                          <Button
+
+                            onClick={() => removeItem(index)}    const subtotal = formData.items.reduce(    accountNumber: "62758070728",    
+
+                            variant="danger"
+
+                            size="sm"      (sum, item) => sum + (parseFloat(item.total) || 0),
+
+                          >
+
+                            <Icon icon="trash" />      0    branchCode: "250655",    if (formData.items.length === 0) {
+
+                          </Button>
+
+                        )}    );
+
+                      </td>
+
+                    </tr>        branchName: "Parktown",      newErrors.items = 'At least one item is required';
+
+                  ))}
+
+                </tbody>    const vatAmount = (subtotal * formData.vatPercentage) / 100;
+
+              </table>
+
+            </div>    const grandTotal = subtotal + vatAmount;    reference: "",    } else {
+
+            <div className="mt-2">
+
+              <Button    
+
+                onClick={addItem}
+
+                variant="outlined"    setFormData({          formData.items.forEach((item, index) => {
+
+                size="sm"
+
+                type="button"      ...formData,
+
+              >
+
+                <Icon icon="plus" className="mr-1" />      subtotal,    ...initialData,        if (!item.description) newErrors[`items.${index}.description`] = 'Description is required';
+
+                Add Item
+
+              </Button>      vatAmount,
+
+            </div>
+
+          </div>      grandTotal,  });        if (!item.unit_price) newErrors[`items.${index}.unit_price`] = 'Unit price is required';
+
+          
+
+          {/* Totals */}    });
+
+          <div className="flex justify-end mb-6">
+
+            <div className="w-64">  };        if (!item.quantity) newErrors[`items.${index}.quantity`] = 'Quantity is required';
+
+              <div className="flex justify-between mb-1">
+
+                <span className="font-semibold">Subtotal:</span>
+
+                <span>R {formData.subtotal.toFixed(2)}</span>
+
+              </div>  const addItem = () => {  const validateForm = () => {      });
+
+              <div className="flex justify-between mb-1">
+
+                <span className="font-semibold">VAT ({formData.vatPercentage}%):</span>    setFormData({
+
+                <span>R {formData.vatAmount.toFixed(2)}</span>
+
+              </div>      ...formData,    // Simple validation    }
+
+              <div className="flex justify-between font-bold text-lg">
+
+                <span>Total:</span>      items: [
+
+                <span>R {formData.grandTotal.toFixed(2)}</span>
+
+              </div>        ...formData.items,    if (!formData.customerName) {    
+
+            </div>
+
+          </div>        {
+
+          
+
+          {/* Banking Details */}          id: Date.now(),      alert("Please enter customer name");    setErrors(newErrors);
+
+          <div className="bg-blue-50 p-4 border border-blue-200 rounded">
+
+            <h3 className="font-bold mb-2">Banking Details:</h3>          code: "",
+
+            <div className="grid grid-cols-2 gap-2">
+
+              <div>          description: "",      return false;    return Object.keys(newErrors).length === 0;
+
+                <p className="text-sm"><span className="font-semibold">Bank:</span> {formData.bankName}</p>
+
+                <p className="text-sm"><span className="font-semibold">Account Name:</span> {formData.accountName}</p>          quantity: "",
+
+                <p className="text-sm"><span className="font-semibold">Account Number:</span> {formData.accountNumber}</p>
+
+              </div>          unitPrice: "",    }  };
+
+              <div>
+
+                <p className="text-sm"><span className="font-semibold">Branch Code:</span> {formData.branchCode}</p>          total: 0,
+
+                <p className="text-sm"><span className="font-semibold">Branch:</span> {formData.branchName}</p>
+
+                <p className="text-sm"><span className="font-semibold">Reference:</span> {formData.reference || formData.invoiceNumber}</p>        },    
+
+              </div>
+
+            </div>      ],
+
+          </div>
+
+    });    // Validate all items have description and values  const handleSubmit = async (e) => {
+
+          <div className="flex justify-end gap-2 mt-6">
+
+            <Button onClick={onClose} variant="outlined" type="button">  };
+
+              Cancel
+
+            </Button>    for (const item of formData.items) {    e.preventDefault();
+
+            <Button type="submit">
+
+              Save Invoice  const removeItem = (index) => {
+
+            </Button>
+
+          </div>    const updatedItems = [...formData.items];      if (!item.description || !item.quantity || !item.unitPrice) {    
+
+        </form>
+
+      </div>    updatedItems.splice(index, 1);
+
+    </div>
+
+  );            alert("Please complete all item details");    if (!validateForm()) {
+
+};
+
+    setFormData({
+
+export default InvoiceModal;
+      ...formData,        return false;      return;
+
+      items: updatedItems,
+
+    }, () => calculateTotals());      }    }
+
+  };
+
+    }
+
+  const handleSubmit = (e) => {
+
+    e.preventDefault();        try {
+
+    
+
+    if (validateForm()) {    return true;      const subtotal = calculateSubtotal();
+
+      // Call the parent component's onSubmit function
+
+      onSubmit && onSubmit(formData);  };      const invoiceData = {
+
+      close();
+
+    }        ...formData,
+
+  };
+
+  const handleInputChange = (e) => {        subtotal: subtotal.toString(),
+
+  return (
+
+    <Modal    const { name, value } = e.target;        items: formData.items.map(item => ({
+
+      title="Invoice"
+
+      visible={visible}    setFormData({          ...item,
+
+      onClose={close}
+
+      width="1100px"      ...formData,          quantity: parseFloat(item.quantity),
+
+      footer={
+
+        <div className="flex justify-end gap-2">      [name]: value,          unit_price: parseFloat(item.unit_price),
+
+          <Button onClick={close} variant="outlined">
+
+            Cancel    });          discount: parseFloat(item.discount || '0')
+
+          </Button>
+
+          <Button onClick={handleSubmit} type="submit">  };        }))
+
+            Save Invoice
+
+          </Button>      };
+
+        </div>
+
+      }  const handleItemChange = (index, field, value) => {
+
+    >
+
+      <form onSubmit={handleSubmit} className="p-4">    const updatedItems = [...formData.items];      if (mode === 'create') {
+
+        {/* Company Header */}
+
+        <div className="bg-blue-50 p-4 mb-6 border border-blue-200 rounded">    updatedItems[index][field] = value;        await createInvoice(invoiceData);
+
+          <div className="flex justify-between">
+
+            <div>          } else {
+
+              <h1 className="text-3xl font-bold text-blue-800">{formData.companyName}</h1>
+
+              <p className="text-sm">Registration: {formData.companyRegistration}</p>    // Calculate item total        await updateInvoice(invoice.id, invoiceData);
+
+              <p className="text-sm">VAT Number: {formData.companyVatNumber}</p>
+
+              <p className="text-sm">{formData.companyAddress1}</p>    if (field === "quantity" || field === "unitPrice") {      }
+
+              <p className="text-sm">{formData.companyAddress2}</p>
+
+              <p className="text-sm">Tel: {formData.companyPhone}</p>      const quantity = parseFloat(updatedItems[index].quantity) || 0;      onClose();
+
+              <p className="text-sm">Email: {formData.companyEmail}</p>
+
+              <p className="text-sm">Web: {formData.companyWebsite}</p>      const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;    } catch (error) {
+
+            </div>
+
+            <div className="text-right">      updatedItems[index].total = quantity * unitPrice;      console.error('Failed to save invoice:', error);
+
+              <h2 className="text-2xl font-bold text-blue-800">TAX INVOICE</h2>
+
+              <div className="mt-4">    }      setErrors({ submit: 'Failed to save invoice. Please try again.' });
+
+                <Input
+
+                  label="Invoice Number"        }
+
+                  name="invoiceNumber"
+
+                  value={formData.invoiceNumber}    // Update form data with new items  };
+
+                  onChange={handleInputChange}
+
+                  required    setFormData({
+
+                />
+
+                <Input      ...formData,  const handleInputChange = (e) => {
+
+                  label="Date"
+
+                  name="date"      items: updatedItems,    const { name, value } = e.target;
+
+                  type="date"
+
+                  value={formData.date}    }, () => calculateTotals());    setFormData(prev => ({ ...prev, [name]: value }));
+
+                  onChange={handleInputChange}
+
+                  required  };    if (name === 'job') {
+
+                />
+
+              </div>      if (value) {
+
+            </div>
+
+          </div>  const calculateTotals = () => {        setIsCustomerLocked(true);
+
+        </div>
+
+            const subtotal = formData.items.reduce(      } else {
+
+        {/* Customer Details */}
+
+        <div className="grid grid-cols-2 gap-4 mb-6">      (sum, item) => sum + (parseFloat(item.total) || 0),        setIsCustomerLocked(false);
+
+          <div>
+
+            <h3 className="font-bold mb-2">Bill To:</h3>      0      }
+
+            <Input
+
+              label="Customer Name"    );    }
+
+              name="customerName"
+
+              value={formData.customerName}        if (name === 'job' && value) {
+
+              onChange={handleInputChange}
+
+              required    const vatAmount = (subtotal * formData.vatPercentage) / 100;      const selectedJob = jobs.find(j => String(j.id) === String(value));
+
+            />
+
+            <Input    const grandTotal = subtotal + vatAmount;      if (selectedJob) {
+
+              label="Customer Address"
+
+              name="customerAddress"            setFormData(prev => ({
+
+              value={formData.customerAddress}
+
+              onChange={handleInputChange}    setFormData({          ...prev,
+
+            />
+
+            <Input      ...formData,          customer: selectedJob.customer,
+
+              label="Phone"
+
+              name="customerPhone"      subtotal,          vehicle_model: selectedJob.vehicle_model,
+
+              value={formData.customerPhone}
+
+              onChange={handleInputChange}      vatAmount,          vehicle_plate: selectedJob.vehicle_plate
+
+            />
+
+            <Input      grandTotal,        }));
+
+              label="Email"
+
+              name="customerEmail"    });      }
+
+              value={formData.customerEmail}
+
+              onChange={handleInputChange}  };    }
+
+            />
+
+            <Input  };
+
+              label="VAT Number"
+
+              name="customerVatNumber"  const addItem = () => {
+
+              value={formData.customerVatNumber}
+
+              onChange={handleInputChange}    setFormData({  const handleItemChange = (index, field, value) => {
+
+            />
+
+          </div>      ...formData,    setFormData(prev => ({
+
+          <div>
+
+            <h3 className="font-bold mb-2">Reference:</h3>      items: [      ...prev,
+
+            <Input
+
+              label="Reference"        ...formData.items,      items: prev.items.map((item, i) => 
+
+              name="reference"
+
+              value={formData.reference}        {        i === index ? { ...item, [field]: value } : item
+
+              onChange={handleInputChange}
+
+            />          id: Date.now(),      )
+
+          </div>
+
+        </div>          code: "",    }));
+
+        
+
+        {/* Items Table */}          description: "",    updateTotals();
+
+        <div className="mb-6">
+
+          <h3 className="font-bold mb-2">Items:</h3>          quantity: "",  };
+
+          <div className="overflow-x-auto">
+
+            <table className="min-w-full bg-white border border-gray-300">          unitPrice: "",
+
+              <thead>
+
+                <tr className="bg-gray-100">          total: 0,  const addItem = () => setFormData(prev => ({ 
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Code</th>
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Description</th>        },    ...prev, 
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Quantity</th>
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Unit Price</th>      ],    items: [
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Total</th>
+
+                  <th className="py-2 px-4 border-b border-gray-300"></th>    });      ...prev.items, 
+
+                </tr>
+
+              </thead>  };      {
+
+              <tbody>
+
+                {formData.items.map((item, index) => (        code: '',
+
+                  <tr key={item.id}>
+
+                    <td className="py-2 px-4 border-b border-gray-300">  const removeItem = (index) => {        description: '',
+
+                      <Input
+
+                        name={`item-${index}-code`}    const updatedItems = [...formData.items];        quantity: '1',
+
+                        value={item.code}
+
+                        onChange={(e) => handleItemChange(index, "code", e.target.value)}    updatedItems.splice(index, 1);        unit: 'pcs',
+
+                      />
+
+                    </td>            unit_price: '',
+
+                    <td className="py-2 px-4 border-b border-gray-300">
+
+                      <Input    setFormData({        discount: '0'
+
+                        name={`item-${index}-description`}
+
+                        value={item.description}      ...formData,      }
+
+                        onChange={(e) => handleItemChange(index, "description", e.target.value)}
+
+                        required      items: updatedItems,    ] 
+
+                      />
+
+                    </td>    }, () => calculateTotals());  }));
+
+                    <td className="py-2 px-4 border-b border-gray-300">
+
+                      <Input  };
+
+                        name={`item-${index}-quantity`}
+
+                        value={item.quantity}  const removeItem = (index) => { 
+
+                        type="number"
+
+                        onChange={(e) => handleItemChange(index, "quantity", e.target.value)}  const handleSubmit = (e) => {    if (formData.items.length > 1) {
+
+                        required
+
+                      />    e.preventDefault();      setFormData(prev => ({ 
+
+                    </td>
+
+                    <td className="py-2 px-4 border-b border-gray-300">            ...prev, 
+
+                      <Input
+
+                        name={`item-${index}-unitPrice`}    if (validateForm()) {        items: prev.items.filter((_, i) => i !== index) 
+
+                        value={item.unitPrice}
+
+                        type="number"      // Call the parent component's onSubmit function      }));
+
+                        onChange={(e) => handleItemChange(index, "unitPrice", e.target.value)}
+
+                        required      onSubmit && onSubmit(formData);    }
+
+                      />
+
+                    </td>      close();  };
+
+                    <td className="py-2 px-4 border-b border-gray-300">
+
+                      R {(parseFloat(item.quantity || 0) * parseFloat(item.unitPrice || 0)).toFixed(2)}    }
+
+                    </td>
+
+                    <td className="py-2 px-4 border-b border-gray-300">  };  const updateTotals = () => {
+
+                      {formData.items.length > 1 && (
+
+                        <Button    const subtotal = calculateSubtotal();
+
+                          onClick={() => removeItem(index)}
+
+                          variant="danger"  return (    const vatRate = parseFloat(formData.vat_rate) || 15;
+
+                          size="sm"
+
+                        >    <Modal    const vatAmount = subtotal * (vatRate / 100);
+
+                          <AppIcon icon="trash" />
+
+                        </Button>      title="Invoice"    const totalAmount = subtotal + vatAmount;
+
+                      )}
+
+                    </td>      visible={visible}
+
+                  </tr>
+
+                ))}      onClose={close}    setFormData(prev => ({
+
+              </tbody>
+
+            </table>      width="1100px"      ...prev,
+
+          </div>
+
+          <div className="mt-2">      footer={      subtotal: subtotal.toFixed(2),
+
+            <Button
+
+              onClick={addItem}        <div className="flex justify-end gap-2">      vat_amount: vatAmount.toFixed(2),
+
+              variant="outlined"
+
+              size="sm"          <Button onClick={close} variant="outlined">      total_amount: totalAmount.toFixed(2)
+
+              type="button"
+
+            >            Cancel    }));
+
+              <AppIcon icon="plus" className="mr-1" />
+
+              Add Item          </Button>  };
+
+            </Button>
+
+          </div>          <Button onClick={handleSubmit} type="submit">
+
+        </div>
+
+                    Save Invoice  useEffect(() => {
+
+        {/* Totals */}
+
+        <div className="flex justify-end mb-6">          </Button>    if (!isOpen) return;
+
+          <div className="w-64">
+
+            <div className="flex justify-between mb-1">        </div>    if (invoice && mode === 'edit') {
+
+              <span className="font-semibold">Subtotal:</span>
+
+              <span>R {formData.subtotal.toFixed(2)}</span>      }      setFormData(prev => ({
+
+            </div>
+
+            <div className="flex justify-between mb-1">    >        ...prev,
+
+              <span className="font-semibold">VAT ({formData.vatPercentage}%):</span>
+
+              <span>R {formData.vatAmount.toFixed(2)}</span>      <form onSubmit={handleSubmit} className="p-4">        invoice_number: invoice.invoice_number || prev.invoice_number,
+
+            </div>
+
+            <div className="flex justify-between font-bold text-lg">        {/* Company Header */}        customer: invoice.customer || '',
+
+              <span>Total:</span>
+
+              <span>R {formData.grandTotal.toFixed(2)}</span>        <div className="bg-blue-50 p-4 mb-6 border border-blue-200 rounded">        job: invoice.job || '',
+
+            </div>
+
+          </div>          <div className="flex justify-between">        date: invoice.date || prev.date,
+
+        </div>
+
+                    <div>        payment_terms: invoice.payment_terms || 'CASH',
+
+        {/* Banking Details */}
+
+        <div className="bg-blue-50 p-4 border border-blue-200 rounded">              <h1 className="text-3xl font-bold text-blue-800">{formData.companyName}</h1>        order_number: invoice.order_number || '',
+
+          <h3 className="font-bold mb-2">Banking Details:</h3>
+
+          <div className="grid grid-cols-2 gap-2">              <p className="text-sm">Registration: {formData.companyRegistration}</p>        company_vat_number: invoice.company_vat_number || '',
+
+            <div>
+
+              <p className="text-sm"><span className="font-semibold">Bank:</span> {formData.bankName}</p>              <p className="text-sm">VAT Number: {formData.companyVatNumber}</p>        customer_vat_number: invoice.customer_vat_number || '',
+
+              <p className="text-sm"><span className="font-semibold">Account Name:</span> {formData.accountName}</p>
+
+              <p className="text-sm"><span className="font-semibold">Account Number:</span> {formData.accountNumber}</p>              <p className="text-sm">{formData.companyAddress1}</p>        contact_person: invoice.contact_person || '',
+
+            </div>
+
+            <div>              <p className="text-sm">{formData.companyAddress2}</p>        contact_number: invoice.contact_number || '',
+
+              <p className="text-sm"><span className="font-semibold">Branch Code:</span> {formData.branchCode}</p>
+
+              <p className="text-sm"><span className="font-semibold">Branch:</span> {formData.branchName}</p>              <p className="text-sm">Tel: {formData.companyPhone}</p>        delivery_address: invoice.delivery_address || '',
+
+              <p className="text-sm"><span className="font-semibold">Reference:</span> {formData.reference || formData.invoiceNumber}</p>
+
+            </div>              <p className="text-sm">Email: {formData.companyEmail}</p>        delivery_note: invoice.delivery_note || '',
+
+          </div>
+
+        </div>              <p className="text-sm">Web: {formData.companyWebsite}</p>        bank_name: invoice.bank_name || '',
+
+      </form>
+
+    </Modal>            </div>        bank_branch: invoice.bank_branch || '',
+
+  );
+
+};            <div className="text-right">        bank_branch_code: invoice.bank_branch_code || '',
+
+              <h2 className="text-2xl font-bold text-blue-800">TAX INVOICE</h2>        bank_account_name: invoice.bank_account_name || '',
+
+              <div className="mt-4">        bank_account_number: invoice.bank_account_number || '',
+
+                <Input        bank_swift_code: invoice.bank_swift_code || '',
+
+                  label="Invoice Number"        items: invoice.items || []
+
+                  name="invoiceNumber"      }));
+
+                  value={formData.invoiceNumber}    }
+
+                  onChange={handleInputChange}  }, [isOpen, invoice, mode]);
+
+                  required
+
+                />  // Effect to update totals when items or VAT rate changes
+
+                <Input  useEffect(() => {
+
+                  label="Date"    if (formData.items.length > 0) {
+
+                  name="date"      updateTotals();
+
+                  type="date"    }
+
+                  value={formData.date}  }, [formData.items, formData.vat_rate]);
+
+                  onChange={handleInputChange}
+
+                  required  // Early return if modal is closed
+
+                />  if (!isOpen) return null;
+
+              </div>
+
+            </div>  return (
+
+          </div>    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+
+        </div>      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4">
+
+                <div className="flex justify-between items-center p-4 border-b">
+
+        {/* Customer Details */}          <h2 className="text-xl font-semibold">
+
+        <div className="grid grid-cols-2 gap-4 mb-6">            {mode === 'create' ? 'Create New Invoice' : 'Edit Invoice'}
+
+          <div>          </h2>
+
+            <h3 className="font-bold mb-2">Bill To:</h3>          <button onClick={onClose} className="p-2">
+
+            <Input            <Icon name="close" className="w-6 h-6" />
+
+              label="Customer Name"          </button>
+
+              name="customerName"        </div>
+
+              value={formData.customerName}
+
+              onChange={handleInputChange}        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+
+              required          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            />            {/* Invoice Details */}
+
+            <Input            <div>
+
+              label="Customer Address"              <label className="block text-sm font-medium mb-1">Invoice Number</label>
+
+              name="customerAddress"              <Input
+
+              value={formData.customerAddress}                name="invoice_number"
+
+              onChange={handleInputChange}                value={formData.invoice_number}
+
+            />                onChange={handleInputChange}
+
+            <Input                error={errors.invoice_number}
+
+              label="Phone"                className="modern-input"
+
+              name="customerPhone"              />
+
+              value={formData.customerPhone}            </div>
+
+              onChange={handleInputChange}
+
+            />            <div>
+
+            <Input              <label className="block text-sm font-medium mb-1">Date</label>
+
+              label="Email"              <Input
+
+              name="customerEmail"                type="date"
+
+              value={formData.customerEmail}                name="date"
+
+              onChange={handleInputChange}                value={formData.date}
+
+            />                onChange={handleInputChange}
+
+            <Input                error={errors.date}
+
+              label="VAT Number"                className="modern-input"
+
+              name="customerVatNumber"              />
+
+              value={formData.customerVatNumber}            </div>
+
+              onChange={handleInputChange}
+
+            />            <div>
+
+          </div>              <label className="block text-sm font-medium mb-1">Payment Terms</label>
+
+          <div>              <select
+
+            <h3 className="font-bold mb-2">Reference:</h3>                name="payment_terms"
+
+            <Input                value={formData.payment_terms}
+
+              label="Reference"                onChange={handleInputChange}
+
+              name="reference"                className="modern-input"
+
+              value={formData.reference}              >
+
+              onChange={handleInputChange}                <option value="CASH">Cash</option>
+
+            />                <option value="30_DAYS">30 Days</option>
+
+          </div>                <option value="60_DAYS">60 Days</option>
+
+        </div>              </select>
+
+                    </div>
+
+        {/* Items Table */}
+
+        <div className="mb-6">            <div>
+
+          <h3 className="font-bold mb-2">Items:</h3>              <label className="block text-sm font-medium mb-1">Order Number</label>
+
+          <div className="overflow-x-auto">              <Input
+
+            <table className="min-w-full bg-white border border-gray-300">                name="order_number"
+
+              <thead>                value={formData.order_number}
+
+                <tr className="bg-gray-100">                onChange={handleInputChange}
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Code</th>                className="modern-input"
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Description</th>              />
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Quantity</th>            </div>
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Unit Price</th>
+
+                  <th className="py-2 px-4 border-b border-gray-300 text-left">Total</th>            {/* Customer Information */}
+
+                  <th className="py-2 px-4 border-b border-gray-300"></th>            <div>
+
+                </tr>              <label className="block text-sm font-medium mb-1">Customer</label>
+
+              </thead>              <select
+
+              <tbody>                name="customer"
+
+                {formData.items.map((item, index) => (                value={formData.customer}
+
+                  <tr key={item.id}>                onChange={handleInputChange}
+
+                    <td className="py-2 px-4 border-b border-gray-300">                disabled={isCustomerLocked}
+
+                      <Input                className="modern-input"
+
+                        name={`item-${index}-code`}              >
+
+                        value={item.code}                <option value="">Select Customer</option>
+
+                        onChange={(e) => handleItemChange(index, "code", e.target.value)}                {customers.map(customer => (
+
+                      />                  <option key={customer.id} value={customer.id}>
+
+                    </td>                    {customer.name}
+
+                    <td className="py-2 px-4 border-b border-gray-300">                  </option>
+
+                      <Input                ))}
+
+                        name={`item-${index}-description`}              </select>
+
+                        value={item.description}              {errors.customer && <p className="text-red-500 text-sm mt-1">{errors.customer}</p>}
+
+                        onChange={(e) => handleItemChange(index, "description", e.target.value)}            </div>
+
+                        required
+
+                      />            <div>
+
+                    </td>              <label className="block text-sm font-medium mb-1">VAT Number</label>
+
+                    <td className="py-2 px-4 border-b border-gray-300">              <Input
+
+                      <Input                name="customer_vat_number"
+
+                        name={`item-${index}-quantity`}                value={formData.customer_vat_number}
+
+                        value={item.quantity}                onChange={handleInputChange}
+
+                        type="number"                className="modern-input"
+
+                        onChange={(e) => handleItemChange(index, "quantity", e.target.value)}              />
+
+                        required            </div>
+
+                      />
+
+                    </td>            <div>
+
+                    <td className="py-2 px-4 border-b border-gray-300">              <label className="block text-sm font-medium mb-1">Contact Person</label>
+
+                      <Input              <Input
+
+                        name={`item-${index}-unitPrice`}                name="contact_person"
+
+                        value={item.unitPrice}                value={formData.contact_person}
+
+                        type="number"                onChange={handleInputChange}
+
+                        onChange={(e) => handleItemChange(index, "unitPrice", e.target.value)}                className="modern-input"
+
+                        required              />
+
+                      />            </div>
+
+                    </td>
+
+                    <td className="py-2 px-4 border-b border-gray-300">            <div>
+
+                      R {(parseFloat(item.quantity || 0) * parseFloat(item.unitPrice || 0)).toFixed(2)}              <label className="block text-sm font-medium mb-1">Contact Number</label>
+
+                    </td>              <Input
+
+                    <td className="py-2 px-4 border-b border-gray-300">                name="contact_number"
+
+                      {formData.items.length > 1 && (                value={formData.contact_number}
+
+                        <Button                onChange={handleInputChange}
+
+                          onClick={() => removeItem(index)}                className="modern-input"
+
+                          variant="danger"              />
+
+                          size="sm"            </div>
+
+                        >
+
+                          <AppIcon icon="trash" />            <div className="col-span-2">
+
+                        </Button>              <label className="block text-sm font-medium mb-1">Delivery Address</label>
+
+                      )}              <textarea
+
+                    </td>                name="delivery_address"
+
+                  </tr>                value={formData.delivery_address}
+
+                ))}                onChange={handleInputChange}
+
+              </tbody>                rows={2}
+
+            </table>                className="modern-input w-full"
+
+          </div>              />
+
+          <div className="mt-2">            </div>
+
+            <Button
+
+              onClick={addItem}            {/* Bank Details */}
+
+              variant="outlined"            <div>
+
+              size="sm"              <label className="block text-sm font-medium mb-1">Bank Name</label>
+
+              type="button"              <Input
+
+            >                name="bank_name"
+
+              <AppIcon icon="plus" className="mr-1" />                value={formData.bank_name}
+
+              Add Item                onChange={handleInputChange}
+
+            </Button>                className="modern-input"
+
+          </div>              />
+
+        </div>            </div>
+
+        
+
+        {/* Totals */}            <div>
+
+        <div className="flex justify-end mb-6">              <label className="block text-sm font-medium mb-1">Branch</label>
+
+          <div className="w-64">              <Input
+
+            <div className="flex justify-between mb-1">                name="bank_branch"
+
+              <span className="font-semibold">Subtotal:</span>                value={formData.bank_branch}
+
+              <span>R {formData.subtotal.toFixed(2)}</span>                onChange={handleInputChange}
+
+            </div>                className="modern-input"
+
+            <div className="flex justify-between mb-1">              />
+
+              <span className="font-semibold">VAT ({formData.vatPercentage}%):</span>            </div>
+
+              <span>R {formData.vatAmount.toFixed(2)}</span>
+
+            </div>            <div>
+
+            <div className="flex justify-between font-bold text-lg">              <label className="block text-sm font-medium mb-1">Branch Code</label>
+
+              <span>Total:</span>              <Input
+
+              <span>R {formData.grandTotal.toFixed(2)}</span>                name="bank_branch_code"
+
+            </div>                value={formData.bank_branch_code}
+
+          </div>                onChange={handleInputChange}
+
+        </div>                className="modern-input"
+
+                      />
+
+        {/* Banking Details */}            </div>
+
+        <div className="bg-blue-50 p-4 border border-blue-200 rounded">
+
+          <h3 className="font-bold mb-2">Banking Details:</h3>            <div>
+
+          <div className="grid grid-cols-2 gap-2">              <label className="block text-sm font-medium mb-1">Account Name</label>
+
+            <div>              <Input
+
+              <p className="text-sm"><span className="font-semibold">Bank:</span> {formData.bankName}</p>                name="bank_account_name"
+
+              <p className="text-sm"><span className="font-semibold">Account Name:</span> {formData.accountName}</p>                value={formData.bank_account_name}
+
+              <p className="text-sm"><span className="font-semibold">Account Number:</span> {formData.accountNumber}</p>                onChange={handleInputChange}
+
+            </div>                className="modern-input"
+
+            <div>              />
+
+              <p className="text-sm"><span className="font-semibold">Branch Code:</span> {formData.branchCode}</p>            </div>
+
+              <p className="text-sm"><span className="font-semibold">Branch:</span> {formData.branchName}</p>
+
+              <p className="text-sm"><span className="font-semibold">Reference:</span> {formData.reference || formData.invoiceNumber}</p>            <div>
+
+            </div>              <label className="block text-sm font-medium mb-1">Account Number</label>
+
+          </div>              <Input
+
+        </div>                name="bank_account_number"
+
+      </form>                value={formData.bank_account_number}
+
+    </Modal>                onChange={handleInputChange}
+
+  );                className="modern-input"
+
+};              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">SWIFT Code</label>
+              <Input
+                name="bank_swift_code"
+                value={formData.bank_swift_code}
+                onChange={handleInputChange}
+                className="modern-input"
+              />
+            </div>
+
+            {/* Invoice Items */}
+            <div className="col-span-2">
+              <h3 className="font-medium text-lg mb-4">Invoice Items</h3>
+              {formData.items.map((item, index) => (
+                <div key={index} className="grid grid-cols-6 gap-4 mb-4">
+                  <div className="col-span-1">
+                    <Input
+                      placeholder="Code"
+                      value={item.code}
+                      onChange={(e) => handleItemChange(index, 'code', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Quantity"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Unit"
+                      value={item.unit}
+                      onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Unit Price"
+                      value={item.unit_price}
+                      onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Discount %"
+                      value={item.discount}
+                      onChange={(e) => handleItemChange(index, 'discount', e.target.value)}
+                      className="modern-input"
+                    />
+                  </div>
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Icon name="trash" className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addItem}
+                className="mt-2"
+              >
+                Add Item
+              </Button>
+            </div>
+
+            {/* Totals */}
+            <div className="col-span-2">
+              <div className="flex justify-end space-x-4">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Subtotal:</p>
+                  <p className="text-sm text-gray-600">VAT ({formData.vat_rate}%):</p>
+                  <p className="font-medium">Total:</p>
+                </div>
+                <div className="text-right min-w-[100px]">
+                  <p className="text-sm">{formData.subtotal}</p>
+                  <p className="text-sm">{formData.vat_amount}</p>
+                  <p className="font-medium">{formData.total_amount}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium mb-1">Notes</label>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleInputChange}
+                rows={4}
+                className="modern-input w-full"
+                placeholder="Additional notes, terms, or special instructions..."
+              />
+            </div>
+
+            <div className="col-span-2">
+              <div className="mt-4 text-sm text-gray-600">
+                <p>* All bank charges are for the account of the transferor</p>
+                <p>* Please use the invoice number as payment reference</p>
+                <p>* This invoice is valid for 30 days from the date of issue</p>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <div className="flex items-center justify-end space-x-4 p-6 border-t bg-gray-50">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="px-4 py-2"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-4 py-2"
+          >
+            {loading ? (
+              <>
+                <Icon name="loader" className="w-4 h-4 mr-2 animate-spin" />
+                {mode === 'create' ? 'Creating...' : 'Updating...'}
+              </>
+            ) : (
+              <>
+                <Icon name="save" className="w-4 h-4 mr-2" />
+                {mode === 'create' ? 'Create Invoice' : 'Update Invoice'}
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default InvoiceModal;

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Starting Regimark Motors Control Center - Local Development"
+echo "Starting Regimark Autoelectrics Control Center - Local Development"
 echo ""
 
 # Function to check if a command exists

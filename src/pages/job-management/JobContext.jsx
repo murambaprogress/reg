@@ -17,7 +17,7 @@ export const JobProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
 
   // Get auth token from localStorage
   const getAuthToken = () => {

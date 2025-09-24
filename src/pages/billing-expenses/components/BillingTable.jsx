@@ -7,14 +7,16 @@ import Button from '../../../components/ui/Button';
 import { useBilling } from '../BillingContext';
 import InvoiceModal from './InvoiceModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
+import EmailModal from './EmailModal';
 
 const BillingTable = ({ searchTerm, dateRange }) => {
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [modalMode, setModalMode] = useState('create');
-  const { invoices, loading, error, markInvoicePaid, deleteInvoice, getInvoice } = useBilling();
+  const { invoices, loading, error, markInvoicePaid, deleteInvoice, getInvoice, sendInvoiceEmail } = useBilling();
 
   const billingData = invoices || [];
 
@@ -74,14 +76,14 @@ const BillingTable = ({ searchTerm, dateRange }) => {
   const formatCurrency = (amount) => {
     if (!amount) return '$0.00';
     return `$${Number(amount).toLocaleString(undefined, { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     })}`;
   };
 
   const handleSelectInvoice = (invoiceId) => {
     setSelectedInvoices(prev => 
-      prev.includes(invoiceId) 
+      prev.includes(invoiceId)
         ? prev.filter(id => id !== invoiceId)
         : [...prev, invoiceId]
     );
@@ -89,7 +91,7 @@ const BillingTable = ({ searchTerm, dateRange }) => {
 
   const handleSelectAll = () => {
     setSelectedInvoices(
-      selectedInvoices.length === filteredData.length 
+      selectedInvoices.length === filteredData.length
         ? [] 
         : filteredData.map(item => item.id)
     );
@@ -145,7 +147,7 @@ const BillingTable = ({ searchTerm, dateRange }) => {
 
   const handleBulkDelete = async () => {
     if (selectedInvoices.length === 0) return;
-    
+
     try {
       await Promise.all(selectedInvoices.map(id => deleteInvoice(id)));
       setSelectedInvoices([]);
@@ -192,84 +194,226 @@ const BillingTable = ({ searchTerm, dateRange }) => {
     URL.revokeObjectURL(url);
   };
 
-  // Download single invoice as JSON (placeholder for future PDF)
+  // Download single invoice as PDF - Soltam Steel Style
   const handleDownloadInvoice = async (invoice) => {
     try {
       const full = await getInvoice(invoice.id);
       if (!full) throw new Error('No invoice data');
+
       // Ensure plugin loaded (autoTable added to prototype)
       if (typeof jsPDF === 'function' && !jsPDF.API.autoTable) {
         try { await import('jspdf-autotable'); } catch (e) { console.warn('autoTable dynamic import failed', e); }
       }
-      // Generate PDF
-      const doc = new jsPDF({ unit: 'pt' });
-      const left = 40;
-      let y = 50;
-      doc.setFontSize(18);
-      doc.text(`INVOICE ${full.invoice_number}`, left, y);
-      doc.setFontSize(10);
-      y += 20;
-      doc.text(`Date: ${full.invoice_date || ''}`, left, y);
-      y += 14;
-      doc.text(`Due: ${full.due_date || ''}`, left, y);
-      y += 20;
-      doc.setFontSize(12);
-      doc.text('Bill To:', left, y);
-      y += 14;
-      doc.setFontSize(10);
-      doc.text(`${full.customer_name || ''}`, left, y); y += 12;
-      if (full.customer_email) { doc.text(full.customer_email, left, y); y += 12; }
-      if (full.customer_phone) { doc.text(full.customer_phone, left, y); y += 12; }
-      y += 10;
-      doc.setFontSize(12);
-      doc.text('Service Description:', left, y); y += 14;
-      doc.setFontSize(10);
-      const serviceLines = doc.splitTextToSize(full.service_description || '', 520);
-      doc.text(serviceLines, left, y);
-      y += serviceLines.length * 12 + 10;
-      // Items table
-      let afterTableY = y;
-      if (Array.isArray(full.items) && full.items.length > 0 && doc.autoTable) {
-        const tableRows = full.items.map(it => [
-          it.item_type || '',
-          (it.description || '').substring(0,120),
-          it.quantity || 0,
-          (Number(it.unit_price || 0)).toFixed(2),
-          (Number(it.total_price || 0)).toFixed(2)
-        ]);
-        doc.autoTable({
-          head: [['Type','Description','Qty','Unit Price','Total']],
-            body: tableRows,
-            startY: y,
-            styles: { fontSize: 9, cellPadding: 4 },
-            headStyles: { fillColor: [30,41,59] }
-        });
-        afterTableY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : y + 20;
-      } else {
-        // No items table, just move spacer
-        afterTableY = y + 10;
-      }
-      // Summary
-      const summaryX = 320;
-      let sy = afterTableY;
-      doc.setFontSize(11);
-      doc.text('Summary', summaryX, sy); sy += 14;
-      doc.setFontSize(10);
-      const money = (v) => (Number(v || 0).toFixed(2));
-      const lines = [
-        ['Subtotal', money(full.subtotal)],
-        ['Tax Rate', `${money(full.tax_rate)}%`],
-        ['Tax Amount', money(full.tax_amount)],
-        ['Discount', money(full.discount_amount)],
-        ['Total', money(full.total_amount)]
-      ];
-      lines.forEach(row => { doc.text(`${row[0]}: ${row[1]}`, summaryX, sy); sy += 12; });
-      if (full.status) { sy += 6; doc.text(`Status: ${full.status}`, summaryX, sy); }
-      // Footer
-      doc.setFontSize(9);
-      doc.text('Generated by System', left, sy + 40);
+
+      // Generate PDF - Soltam Steel Invoice Style
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 40;
+      let y = 60;
+
+      // Company Header - Logo Image
       try {
-        doc.save(`invoice_${full.invoice_number}.pdf`);
+        const logoResponse = await fetch('/assets/images/Regimark_Logo_page-0001-1752221173479.jpg');
+        const logoBlob = await logoResponse.blob();
+        const logoData = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(logoBlob);
+        });
+        doc.addImage(logoData, 'JPEG', (pageWidth - 200) / 2, y - 40, 200, 50);
+        y += 30;
+      } catch (error) {
+        console.warn('Failed to load logo image, using text fallback', error);
+        // Fallback to text
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        const companyName = 'Regimark Motors';
+        const companyNameWidth = doc.getTextWidth(companyName);
+        doc.text(companyName, (pageWidth - companyNameWidth) / 2, y);
+        y += 25;
+      }
+
+      // Address
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const address1 = '85 Plymouth Road';
+      const address1Width = doc.getTextWidth(address1);
+      doc.text(address1, (pageWidth - address1Width) / 2, y);
+
+      y += 15;
+      const address2 = 'Southerton, Harare';
+      const address2Width = doc.getTextWidth(address2);
+      doc.text(address2, (pageWidth - address2Width) / 2, y);
+
+      y += 40;
+
+      // Invoice Details Section
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date & Time', margin, y);
+      doc.text('Invoice No', pageWidth - margin - 100, y);
+      
+      y += 20;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const invoiceDate = new Date(full.invoice_date || new Date()).toLocaleDateString();
+      const invoiceTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      doc.text(`${invoiceDate} ${invoiceTime}`, margin, y);
+      doc.text(full.invoice_number || 'SS047', pageWidth - margin - 100, y);
+
+      y += 40;
+
+      // Bill To Section
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bill to', margin, y);
+      
+      y += 20;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      
+      // Customer details
+      if (full.customer_name) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Company Name', margin, y);
+        doc.setFont('helvetica', 'normal');
+        y += 15;
+        doc.text(full.customer_name, margin, y);
+        y += 20;
+      }
+      
+      if (full.customer_address) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Street Address', margin, y);
+        doc.setFont('helvetica', 'normal');
+        y += 15;
+        doc.text(full.customer_address, margin, y);
+        y += 20;
+      }
+      
+      if (full.customer_city) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('City', margin, y);
+        doc.setFont('helvetica', 'normal');
+        y += 15;
+        doc.text(full.customer_city, margin, y);
+        y += 20;
+      }
+
+      // Phone and Email in right column
+      let rightY = y - 60;
+      if (full.customer_phone) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Phone', pageWidth - margin - 200, rightY);
+        doc.setFont('helvetica', 'normal');
+        rightY += 15;
+        doc.text(full.customer_phone, pageWidth - margin - 200, rightY);
+        rightY += 20;
+      }
+      
+      if (full.customer_email) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('E-mail address', pageWidth - margin - 200, rightY);
+        doc.setFont('helvetica', 'normal');
+        rightY += 15;
+        doc.text(full.customer_email, pageWidth - margin - 200, rightY);
+      }
+
+      y += 40;
+
+      // Items Table
+      if (Array.isArray(full.items) && full.items.length > 0 && doc.autoTable) {
+        const tableRows = full.items.map((item, index) => [
+          (index + 1).toString(),
+          item.description || '',
+          `$${(Number(item.unit_price || 0)).toFixed(2)}`,
+          item.quantity || '1',
+          `$${(Number(item.total_price || 0)).toFixed(2)}`
+        ]);
+
+        doc.autoTable({
+          head: [['No', 'Product Description', 'Price', 'Quantity', 'Amount']],
+          body: tableRows,
+          startY: y,
+          styles: { 
+            fontSize: 10, 
+            cellPadding: 8,
+            lineColor: [0, 0, 0],
+            lineWidth: 0.5
+          },
+          headStyles: { 
+            fillColor: [240, 240, 240],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold'
+          },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 40 },
+            1: { cellWidth: 250 },
+            2: { halign: 'right', cellWidth: 80 },
+            3: { halign: 'center', cellWidth: 60 },
+            4: { halign: 'right', cellWidth: 80 }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        y = doc.lastAutoTable.finalY + 30;
+      }
+
+      // Totals Section
+      const totalsX = pageWidth - margin - 150;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      
+      // Sub-total
+      doc.text('Sub-total', totalsX - 80, y);
+      doc.text(`$${(Number(full.subtotal || 0)).toFixed(2)}`, totalsX, y);
+      y += 20;
+      
+      // VAT (if applicable)
+      if (full.tax_amount && Number(full.tax_amount) > 0) {
+        doc.text('VAT', totalsX - 80, y);
+        doc.text(`$${(Number(full.tax_amount || 0)).toFixed(2)}`, totalsX, y);
+        y += 20;
+      }
+      
+      // Total Amount
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Amount', totalsX - 80, y);
+      doc.text(`$${(Number(full.total_amount || 0)).toFixed(2)}`, totalsX, y);
+
+      y += 60;
+
+      // Footer - Company Services
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      
+      const footerY = pageHeight - 100;
+      const emailText = 'Email: rmakambe@gmail.com';
+      const emailWidth = doc.getTextWidth(emailText);
+      doc.text(emailText, (pageWidth - emailWidth) / 2, footerY);
+      
+      const addressText = '85 Plymouth Road, Southerton, Harare';
+      const addressWidth = doc.getTextWidth(addressText);
+      doc.text(addressText, (pageWidth - addressWidth) / 2, footerY + 15);
+      
+      doc.setFont('helvetica', 'bold');
+      const servicesText = 'For all your auto electricals & computer diagnostics';
+      const servicesWidth = doc.getTextWidth(servicesText);
+      doc.text(servicesText, (pageWidth - servicesWidth) / 2, footerY + 30);
+      
+      const injectionText = 'Petrol & Diesel Injection';
+      const injectionWidth = doc.getTextWidth(injectionText);
+      doc.text(injectionText, (pageWidth - injectionWidth) / 2, footerY + 45);
+      
+      doc.setFont('helvetica', 'normal');
+      const phoneText = '+263 772 980 161 / +263 719 980 161 / +263 732 980 161';
+      const phoneWidth = doc.getTextWidth(phoneText);
+      doc.text(phoneText, (pageWidth - phoneWidth) / 2, footerY + 60);
+
+      // Save the PDF
+      try {
+        doc.save(`invoice_${full.invoice_number || 'SS047'}.pdf`);
       } catch (saveErr) {
         console.error('PDF save failed', saveErr);
         alert('Unable to download PDF in this browser environment.');
@@ -278,6 +422,229 @@ const BillingTable = ({ searchTerm, dateRange }) => {
       console.error('Failed to download invoice:', e);
       alert('Invoice PDF generation failed. Check console for details.');
     }
+  };
+
+  const handlePrintInvoice = async (invoice) => {
+    try {
+      const full = await getInvoice(invoice.id);
+      if (!full) throw new Error('No invoice data');
+      
+      // Generate PDF for printing
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 40;
+      let y = 60;
+
+      // Company Header - Centered address
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const address1 = '85 Plymouth Road';
+      const address1Width = doc.getTextWidth(address1);
+      doc.text(address1, (pageWidth - address1Width) / 2, y);
+
+      y += 15;
+      const address2 = 'Southerton';
+      const address2Width = doc.getTextWidth(address2);
+      doc.text(address2, (pageWidth - address2Width) / 2, y);
+
+      y += 15;
+      const address3 = 'Harare';
+      const address3Width = doc.getTextWidth(address3);
+      doc.text(address3, (pageWidth - address3Width) / 2, y);
+
+      y += 40;
+
+      // Invoice Details Section
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date & Time', margin, y);
+      doc.text('Invoice No', pageWidth - margin - 100, y);
+      
+      y += 20;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const invoiceDate = new Date(full.invoice_date || new Date()).toLocaleDateString();
+      const invoiceTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      doc.text(`${invoiceDate} ${invoiceTime}`, margin, y);
+      doc.text(full.invoice_number || 'SS047', pageWidth - margin - 100, y);
+
+      y += 40;
+
+      // Bill To Section
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bill to', margin, y);
+      
+      y += 20;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      
+      // Customer details
+      if (full.customer_name) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Company Name', margin, y);
+        doc.setFont('helvetica', 'normal');
+        y += 15;
+        doc.text(full.customer_name, margin, y);
+        y += 20;
+      }
+      
+      if (full.customer_address) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Street Address', margin, y);
+        doc.setFont('helvetica', 'normal');
+        y += 15;
+        doc.text(full.customer_address, margin, y);
+        y += 20;
+      }
+      
+      if (full.customer_city) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('City', margin, y);
+        doc.setFont('helvetica', 'normal');
+        y += 15;
+        doc.text(full.customer_city, margin, y);
+        y += 20;
+      }
+
+      // Phone and Email in right column
+      let rightY = y - 60;
+      if (full.customer_phone) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Phone', pageWidth - margin - 200, rightY);
+        doc.setFont('helvetica', 'normal');
+        rightY += 15;
+        doc.text(full.customer_phone, pageWidth - margin - 200, rightY);
+        rightY += 20;
+      }
+      
+      if (full.customer_email) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('E-mail address', pageWidth - margin - 200, rightY);
+        doc.setFont('helvetica', 'normal');
+        rightY += 15;
+        doc.text(full.customer_email, pageWidth - margin - 200, rightY);
+      }
+
+      y += 40;
+
+      // Items Table
+      if (Array.isArray(full.items) && full.items.length > 0 && doc.autoTable) {
+        const tableRows = full.items.map((item, index) => [
+          (index + 1).toString(),
+          item.description || '',
+          `$${(Number(item.unit_price || 0)).toFixed(2)}`,
+          item.quantity || '1',
+          `$${(Number(item.total_price || 0)).toFixed(2)}`
+        ]);
+
+        doc.autoTable({
+          head: [['No', 'Product Description', 'Price', 'Quantity', 'Amount']],
+          body: tableRows,
+          startY: y,
+          styles: { 
+            fontSize: 10, 
+            cellPadding: 8,
+            lineColor: [0, 0, 0],
+            lineWidth: 0.5
+          },
+          headStyles: { 
+            fillColor: [240, 240, 240],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold'
+          },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 40 },
+            1: { cellWidth: 250 },
+            2: { halign: 'right', cellWidth: 80 },
+            3: { halign: 'center', cellWidth: 60 },
+            4: { halign: 'right', cellWidth: 80 }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        y = doc.lastAutoTable.finalY + 30;
+      }
+
+      // Totals Section
+      const totalsX = pageWidth - margin - 150;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      
+      // Sub-total
+      doc.text('Sub-total', totalsX - 80, y);
+      doc.text(`$${(Number(full.subtotal || 0)).toFixed(2)}`, totalsX, y);
+      y += 20;
+      
+      // VAT (if applicable)
+      if (full.tax_amount && Number(full.tax_amount) > 0) {
+        doc.text('VAT', totalsX - 80, y);
+        doc.text(`$${(Number(full.tax_amount || 0)).toFixed(2)}`, totalsX, y);
+        y += 20;
+      }
+      
+      // Total Amount
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Amount', totalsX - 80, y);
+      doc.text(`$${(Number(full.total_amount || 0)).toFixed(2)}`, totalsX, y);
+
+      y += 60;
+
+      // Footer - Company Services
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      
+      const footerY = pageHeight - 100;
+      const emailText = 'Email: rmakambe@gmail.com';
+      const emailWidth = doc.getTextWidth(emailText);
+      doc.text(emailText, (pageWidth - emailWidth) / 2, footerY);
+      
+      const addressText = '85 Plymouth Road, Southerton, Harare';
+      const addressWidth = doc.getTextWidth(addressText);
+      doc.text(addressText, (pageWidth - addressWidth) / 2, footerY + 15);
+      
+      doc.setFont('helvetica', 'bold');
+      const servicesText = 'For all your auto electricals & computer diagnostics';
+      const servicesWidth = doc.getTextWidth(servicesText);
+      doc.text(servicesText, (pageWidth - servicesWidth) / 2, footerY + 30);
+      
+      const injectionText = 'Petrol & Diesel Injection';
+      const injectionWidth = doc.getTextWidth(injectionText);
+      doc.text(injectionText, (pageWidth - injectionWidth) / 2, footerY + 45);
+      
+      doc.setFont('helvetica', 'normal');
+      const phoneText = '+263 772 980 161 / +263 719 980 161 / +263 732 980 161';
+      const phoneWidth = doc.getTextWidth(phoneText);
+      doc.text(phoneText, (pageWidth - phoneWidth) / 2, footerY + 60);
+
+      // Print the PDF
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl, '_blank');
+      
+      if (printWindow) {
+        printWindow.onload = function() {
+          printWindow.print();
+        };
+      } else {
+        alert('Please allow pop-ups to print invoices');
+      }
+    } catch (e) {
+      console.error('Failed to print invoice:', e);
+      alert('Invoice printing failed. Check console for details.');
+    }
+  };
+
+  const handleShareWhatsApp = (invoice) => {
+    const message = `Hello! Here is your invoice ${invoice.invoice_number} from Regimark Motors. Total amount: $${invoice.total_amount}. Please contact us at +263 772 980 161 for any questions.`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleSendEmail = (invoice) => {
+    setSelectedInvoice(invoice);
+    setIsEmailModalOpen(true);
   };
 
   return (
@@ -437,74 +804,47 @@ const BillingTable = ({ searchTerm, dateRange }) => {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handlePrintInvoice(invoice)}
+                      className="modern-button p-1 hover:bg-background"
+                      title="Print Invoice"
+                    >
+                      <Icon name="Printer" size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDownloadInvoice(invoice)}
                       className="modern-button p-1 hover:bg-background"
                       title="Download Invoice (PDF)"
                     >
                       <Icon name="Download" size={16} />
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSendEmail(invoice)}
+                      className="modern-button p-1 hover:bg-blue-50 text-blue-600"
+                      title="Send via Email"
+                    >
+                      <Icon name="Mail" size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleShareWhatsApp(invoice)}
+                      className="modern-button p-1 hover:bg-green-50 text-green-600"
+                      title="Share via WhatsApp"
+                    >
+                      <Icon name="MessageCircle" size={16} />
+                    </Button>
                   </div>
                 </td>
               </tr>
             ))}
-            {filteredData.length === 0 && !loading && (
-              <tr>
-                <td colSpan={8} className="p-8 text-center text-text-secondary">
-                  <Icon name="FileText" size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>No invoices found</p>
-                  {searchTerm && <p className="text-sm">Try adjusting your search terms</p>}
-                </td>
-              </tr>
-            )}
-            {loading && (
-              <tr>
-                <td colSpan={8} className="p-8 text-center text-text-secondary">
-                  <Icon name="Loader" size={24} className="mx-auto mb-2 animate-spin" />
-                  <p>Loading invoices...</p>
-                </td>
-              </tr>
-            )}
-            {/* Totals Row */}
-            {filteredData.length > 0 && (
-              <tr className="bg-background/75 font-heading-medium text-text-primary">
-                <td className="p-4" colSpan={4}></td>
-                <td className="p-4 border-t border-border">
-                  Total: {formatCurrency(totalAmount)}
-                </td>
-                <td className="p-4 border-t border-border" colSpan={3}></td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
 
-      {/* Table Footer */}
-      <div className="p-6 border-t border-border bg-background/25">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-text-secondary">
-            Showing {filteredData.length} of {billingData.length} invoices
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="modern-button border-border hover:border-primary"
-            >
-              <Icon name="ChevronLeft" size={16} />
-            </Button>
-            <span className="text-sm text-text-primary px-3 py-1">1 of 1</span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="modern-button border-border hover:border-primary"
-            >
-              <Icon name="ChevronRight" size={16} />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Modals */}
       <InvoiceModal
         isOpen={isInvoiceModalOpen}
         onClose={() => setIsInvoiceModalOpen(false)}
@@ -520,6 +860,13 @@ const BillingTable = ({ searchTerm, dateRange }) => {
         message="Are you sure you want to delete this invoice?"
         itemName={selectedInvoice ? `${selectedInvoice.invoice_number} - ${selectedInvoice.customer_name}` : ''}
         loading={loading}
+      />
+
+      <EmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        invoice={selectedInvoice}
+        onSendEmail={sendInvoiceEmail}
       />
     </div>
   );

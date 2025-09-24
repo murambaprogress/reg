@@ -43,13 +43,16 @@ const AddCustomerModal = ({ isOpen, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-    const payload = {
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      address: formData.address,
-      preferred_contact: formData.preferredContact,
-      notes: formData.notes
+        const payload = {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          preferred_contact: formData.preferredContact,
+          notes: formData.notes,
+          amount_received: formData.amountReceived ? Number(formData.amountReceived) : undefined,
+          inventory_sold: formData.inventorySold ? JSON.stringify(formData.inventorySold.split(',').map(s => s.trim()).filter(Boolean)) : undefined,
+          full_cost: formData.fullCost ? Number(formData.fullCost) : undefined
     };
     try {
       await createCustomer(payload);
@@ -198,6 +201,41 @@ const AddCustomerModal = ({ isOpen, onClose, onSave }) => {
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
+                <div>
+                  <label className="block text-sm font-body-medium text-text-primary mb-2">
+                    Amount Received
+                  </label>
+                  <Input
+                    type="number"
+                    value={formData.amountReceived}
+                    onChange={(e) => handleInputChange('amountReceived', e.target.value)}
+                    placeholder="Enter amount received"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-body-medium text-text-primary mb-2">
+                    Inventory Sold
+                  </label>
+                  <Input
+                    type="text"
+                    value={formData.inventorySold}
+                    onChange={(e) => handleInputChange('inventorySold', e.target.value)}
+                    placeholder="Comma-separated list of items sold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-body-medium text-text-primary mb-2">
+                    Full Cost
+                  </label>
+                  <Input
+                    type="number"
+                    value={formData.fullCost}
+                    onChange={(e) => handleInputChange('fullCost', e.target.value)}
+                    placeholder="Enter full cost"
+                  />
+                </div>
             </div>
           </div>
 

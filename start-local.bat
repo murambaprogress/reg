@@ -1,5 +1,5 @@
 @echo off
-echo Starting Regimark Motors Control Center - Local Development
+echo Starting Regimark Autoelectrics Control Center - Local Development
 echo.
 
 echo Starting Django Backend Server...

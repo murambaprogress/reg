@@ -6,7 +6,7 @@ const getAuthToken = () => {
   try { return localStorage.getItem('token'); } catch (e) { return null; }
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const CustomerProvider = ({ children }) => {
   const [customers, setCustomers] = useState([]);
@@ -22,16 +22,39 @@ export const CustomerProvider = ({ children }) => {
     if (typeof resolver === 'function') resolver(value);
   };
 
+  // Helper to normalize backend fields to camelCase
+  const normalizeCustomer = (raw = {}) => {
+    const obj = { ...raw };
+    if (raw.amount_received !== undefined) obj.amountReceived = raw.amount_received;
+    if (raw.full_cost !== undefined) obj.fullCost = raw.full_cost;
+    if (raw.inventory_sold !== undefined) {
+      try {
+        obj.inventorySold = JSON.parse(raw.inventory_sold);
+      } catch {
+        obj.inventorySold = raw.inventory_sold;
+      }
+    }
+    return obj;
+  };
+
   useEffect(() => {
     const token = getAuthToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  fetch(`${API_BASE}/customers/`, { headers }).then(r => r.json()).then(data => Array.isArray(data) ? setCustomers(data) : setCustomers([])).catch(() => setCustomers([]));
+    fetch(`${API_BASE}/customers/`, { headers })
+      .then(r => r.json())
+      .then(data => Array.isArray(data) ? setCustomers(data.map(normalizeCustomer)) : setCustomers([]))
+      .catch(() => setCustomers([]));
   }, []);
 
   const refreshCustomers = () => {
     const token = getAuthToken();
     const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-  return fetch(`${API_BASE}/customers/`, { headers }).then(r => r.json()).then(data => { if (Array.isArray(data)) setCustomers(data); return data; });
+    return fetch(`${API_BASE}/customers/`, { headers })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setCustomers(data.map(normalizeCustomer));
+        return Array.isArray(data) ? data.map(normalizeCustomer) : data;
+      });
   };
 
   const searchCustomers = (q) => {
@@ -53,7 +76,18 @@ export const CustomerProvider = ({ children }) => {
   const createCustomer = (payload) => {
     const token = getAuthToken();
     const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-  return fetch(`${API_BASE}/customers/`, { method: 'POST', headers, body: JSON.stringify(payload) }).then(async (r) => {
+      // Add support for amountReceived, inventorySold, and fullCost fields
+      const apiPayload = { ...payload };
+      if (payload.amountReceived !== undefined) {
+        apiPayload.amount_received = Number(payload.amountReceived);
+      }
+      if (payload.inventorySold !== undefined) {
+        apiPayload.inventory_sold = Array.isArray(payload.inventorySold) ? JSON.stringify(payload.inventorySold) : String(payload.inventorySold);
+      }
+      if (payload.fullCost !== undefined) {
+        apiPayload.full_cost = Number(payload.fullCost);
+      }
+      return fetch(`${API_BASE}/customers/`, { method: 'POST', headers, body: JSON.stringify(apiPayload) }).then(async (r) => {
       let text = null; try { text = await r.text(); } catch (e) { text = null; }
       let data = null; try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
       if (!r.ok) {

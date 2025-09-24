@@ -9,7 +9,9 @@ const AddSupplierModal = ({ isOpen, onClose }) => {
     name: '',
     contact: '',
     phone: '',
+    goodsSupplier: '',
     amount: '',
+    amountPaid: '',
     dueDate: '',
     state: 'due',
   });
@@ -25,18 +27,20 @@ const AddSupplierModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     setSubmitting(true);
     createSupplier({
-  name: form.name,
-  contact: form.contact,
-  phone: form.phone,
-  amount: Number(form.amount || 0),
-  dueDate: form.dueDate || null,
-  state: form.state,
-  productsSupplied: [],
-  previous: [],
-  future: [],
-  payments: [],
+      name: form.name,
+      contact: form.contact,
+      phone: form.phone,
+      goodsSupplier: form.goodsSupplier,
+      amount: Number(form.amount || 0),
+      amountPaid: Number(form.amountPaid || 0),
+      dueDate: form.dueDate || null,
+      state: form.state,
+      productsSupplied: [],
+      previous: [],
+      future: [],
+      payments: [],
     }).then(() => {
-      setForm({ name: '', contact: '', phone: '', amount: '', dueDate: '', state: 'due' });
+      setForm({ name: '', contact: '', phone: '', goodsSupplier: '', amount: '', amountPaid: '', dueDate: '', state: 'due' });
       setSubmitting(false);
       onClose();
     }).catch(() => {
@@ -52,7 +56,9 @@ const AddSupplierModal = ({ isOpen, onClose }) => {
           <Input name="name" label="Name" value={form.name} onChange={handleChange} required autoFocus />
           <Input name="contact" label="Contact Person" value={form.contact} onChange={handleChange} required />
           <Input name="phone" label="Phone" value={form.phone} onChange={handleChange} required />
+          <Input name="goodsSupplier" label="Goods Supplier" value={form.goodsSupplier} onChange={handleChange} />
           <Input name="amount" label="Amount" type="number" value={form.amount} onChange={handleChange} required min={0} />
+          <Input name="amountPaid" label="Amount Paid (for part payment)" type="number" value={form.amountPaid} onChange={handleChange} min={0} />
           <Input name="dueDate" label="Due Date" type="date" value={form.dueDate} onChange={handleChange} required />
           <div className="flex gap-2">
             <Button type="submit" variant="primary" disabled={submitting} className="flex-1">{submitting ? 'Adding...' : 'Add Supplier'}</Button>
