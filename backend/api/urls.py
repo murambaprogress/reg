@@ -9,6 +9,7 @@ urlpatterns = [
     path('create-technician', views.create_technician, name='create_technician'),
     path('me', views.me, name='me'),
     path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
+    path('health-check/', views.health_check, name='health_check'),
 ]
 
 urlpatterns += [

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>React Test</title>
+</head>
+<body>
+  <div id="react-test"></div>
+  <script>
+    // This will output to the console any React rendering issues
+    window.onerror = function(message, source, lineno, colno, error) {
+      document.getElementById('react-test').innerHTML += '<p style="color: red;">Error: ' + message + '</p>';
+      return false;
+    };
+
+    // Add a button to manually test React rendering
+    document.getElementById('react-test').innerHTML = `
+      <h2>React Rendering Test</h2>
+      <p>If you see this, the HTML is working correctly.</p>
+      <button id="test-btn">Click to Test React</button>
+      <div id="test-output"></div>
+    `;
+
+    document.getElementById('test-btn').addEventListener('click', function() {
+      try {
+        // Try to access React
+        if (window.React) {
+          document.getElementById('test-output').innerHTML = '<p style="color: green;">React is loaded!</p>';
+        } else {
+          document.getElementById('test-output').innerHTML = '<p style="color: red;">React is not loaded.</p>';
+        }
+      } catch (e) {
+        document.getElementById('test-output').innerHTML = '<p style="color: red;">Error: ' + e.message + '</p>';
+      }
+    });
+  </script>
+</body>
+</html>

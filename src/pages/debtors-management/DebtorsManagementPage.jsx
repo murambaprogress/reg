@@ -222,22 +222,40 @@ function DebtorsManagementPage() {
         onSuccess={async (result) => {
           console.log('DebtorsManagementPage onSuccess called with:', result);
           
-          // Force a complete refresh of the debtors data
-          await queryClient.invalidateQueries({ queryKey: ['debtors'] });
-          await queryClient.refetchQueries({ queryKey: ['debtors'] });
-          await refetchDebtors();
-          
-          console.log('Data refresh completed');
-          
-          setLastUploadStatus({
-            type: 'success',
-            message: `Successfully imported ${result.count || result.success_count || result.transactions_processed} debtors`
-          });
-          
-          // Keep the status visible for 5 seconds
-          setTimeout(() => {
-            setLastUploadStatus(null);
-          }, 5000);
+          try {
+            // Force a complete refresh of the debtors data using multiple approaches
+            await queryClient.invalidateQueries({ queryKey: ['debtors'] });
+            await queryClient.refetchQueries({ queryKey: ['debtors'] });
+            
+            // Add a small delay and do another refetch for extra reliability
+            setTimeout(async () => {
+              console.log('Performing additional refetch for reliability');
+              await refetchDebtors();
+            }, 500);
+            
+            console.log('Data refresh completed');
+            
+            // Calculate the success count from any available property
+            const successCount = result.count || result.success_count || 
+                              result.imported_count || result.transactions_processed || 0;
+            
+            setLastUploadStatus({
+              type: 'success',
+              message: `Successfully imported ${successCount} debtors`
+            });
+            
+            // Keep the status visible for 5 seconds
+            setTimeout(() => {
+              setLastUploadStatus(null);
+            }, 5000);
+          } catch (error) {
+            console.error('Error refreshing data after import:', error);
+            // Still show success message even if refresh failed
+            setLastUploadStatus({
+              type: 'success',
+              message: 'Import successful. Please refresh page to see updates.'
+            });
+          }
         }}
       />
 

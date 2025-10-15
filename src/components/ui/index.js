@@ -11,3 +11,4 @@ export { default as Alert } from './Alert';
 export { default as Card } from './Card';
 export { default as DataGrid } from './DataGrid';
 export { default as FileUpload } from './FileUpload';
+export { default as DropdownMenu } from './DropdownMenu';

@@ -4,6 +4,7 @@ import Button from "../../../components/ui/Button";
 import Input from "../../../components/ui/Input";
 import { useBilling } from "../BillingContext";
 import { getAllCustomers, searchCustomers } from "../../../api/customers";
+import { validateInvoice, formatInvoiceData, showNotification } from "../../../utils/billingApiHelper";
 
 const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
   const { createInvoice, updateInvoice, fetchInvoices, loading } = useBilling();
@@ -40,6 +41,8 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
     
     // Totals
     subtotal: 0,
+    discountPercentage: 0,
+    discountAmount: 0,
     vatAmount: 0,
     vatIncluded: false,
     totalAmount: 0,
@@ -99,6 +102,8 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
           amount: item.total_price || 0,
         })) : prev.items,
         subtotal: invoice.subtotal || 0,
+        discountPercentage: invoice.discount_percentage || 0,
+        discountAmount: invoice.discount_amount || 0,
         vatAmount: invoice.tax_amount || 0,
         totalAmount: invoice.total_amount || 0,
       }));
@@ -125,6 +130,7 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
   }, [invoice, mode, customers]);
 
   const validateForm = () => {
+    // Validate invoice number
     if (!formData.invoiceNumber.trim()) {
       alert("Please enter invoice number");
       return false;
@@ -136,21 +142,52 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
       return false;
     }
     
-    if (showNewCustomer && !formData.customerCompanyName.trim()) {
-      alert("Please enter customer company name");
+    // Validate customer data
+    if (showNewCustomer) {
+      if (!formData.customerCompanyName.trim()) {
+        alert("Please enter customer company name");
+        return false;
+      }
+      
+      // Validate contact information - at least one contact method
+      if (!formData.customerPhone.trim() && !formData.customerEmail.trim()) {
+        alert("Please provide at least one contact method (phone or email)");
+        return false;
+      }
+      
+      // Basic email validation
+      if (formData.customerEmail.trim() && !formData.customerEmail.includes('@')) {
+        alert("Please enter a valid email address");
+        return false;
+      }
+    }
+    
+    // Check if we have any items
+    if (formData.items.length === 0) {
+      alert("Please add at least one item to the invoice");
       return false;
     }
     
     // Validate all items have description and price
-    for (const item of formData.items) {
+    for (const [index, item] of formData.items.entries()) {
       if (!item.description.trim()) {
-        alert("Please enter description for all items");
+        alert(`Please enter description for item #${index + 1}`);
         return false;
       }
       if (!item.price || parseFloat(item.price) <= 0) {
-        alert("Please enter valid price for all items");
+        alert(`Please enter valid price for item #${index + 1}`);
         return false;
       }
+      if (!item.quantity || parseInt(item.quantity) <= 0) {
+        alert(`Please enter valid quantity for item #${index + 1}`);
+        return false;
+      }
+    }
+    
+    // Validate totals
+    if (formData.totalAmount <= 0) {
+      alert("Total invoice amount cannot be zero or negative");
+      return false;
     }
     
     return true;
@@ -219,13 +256,20 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
       0
     );
     
+    // Calculate discount amount based on percentage
+    const discountAmount = (subtotal * formData.discountPercentage) / 100;
+    
+    // Calculate subtotal after discount
+    const subtotalAfterDiscount = subtotal - discountAmount;
+    
     // VAT is optional - only calculate if vatIncluded is true
-    const vatAmount = formData.vatIncluded ? (subtotal * 0.15) : 0; // 15% VAT
-    const totalAmount = subtotal + vatAmount;
+    const vatAmount = formData.vatIncluded ? (subtotalAfterDiscount * 0.15) : 0; // 15% VAT
+    const totalAmount = subtotalAfterDiscount + vatAmount;
     
     setFormData(prev => ({
       ...prev,
       subtotal,
+      discountAmount,
       vatAmount,
       totalAmount,
     }));
@@ -268,71 +312,97 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
     if (!validateForm()) return;
     
     try {
-      const invoiceData = {
-        invoice_number: formData.invoiceNumber,
-        invoice_date: formData.invoiceDate,
-        due_date: formData.invoiceDate, // You may want to allow user to set due date
-        service_description: formData.items.map(item => item.description).join(', '),
-        subtotal: formData.subtotal,
-        tax_rate: formData.vatIncluded ? 15 : 0,
-        discount_amount: 0,
-        status: 'draft',
-        payment_method: 'pending',
-        items: formData.items.map(item => ({
-          item_type: 'service', // If you support other types, set accordingly
-          description: item.description,
-          quantity: parseFloat(item.quantity) || 1,
-          unit_price: parseFloat(item.price) || 0,
-          part_number: '',
-        })),
+      // Show loading state
+      setLoading(true);
+      
+      // Add customer data to formData for the formatter
+      const formDataWithCustomer = {
+        ...formData,
+        customer_id: selectedCustomer?.id || null
       };
-
-      // Handle customer data - match serializer field names exactly
-      if (selectedCustomer) {
-        // Use existing customer
-        invoiceData.customer = selectedCustomer.id;
-      } else if (showNewCustomer) {
-        // Send customer data for creation - use exact field names from serializer
-        invoiceData.customer_company_name = formData.customerCompanyName;
-        invoiceData.customer_address = formData.customerStreetAddress;
-        invoiceData.customer_city = formData.customerCity;
-        if (formData.customerPhone) invoiceData.customer_phone_input = formData.customerPhone;
-        if (formData.customerEmail) invoiceData.customer_email_input = formData.customerEmail;
+      
+      // Format the invoice data using our helper
+      const invoiceData = formatInvoiceData(formDataWithCustomer);
+      
+      // Validate the formatted invoice data
+      const { isValid, errors } = validateInvoice(invoiceData);
+      
+      if (!isValid) {
+        // Show validation errors
+        const errorMessage = errors.join('\n');
+        showNotification(errorMessage, 'error');
+        throw new Error(errorMessage);
       }
-
+      
+      let result;
+      
       if (mode === 'create') {
-        await createInvoice(invoiceData);
-        await fetchInvoices();
+        // Create new invoice
+        console.log('Creating new invoice:', invoiceData);
+        result = await createInvoice(invoiceData);
+        console.log('Invoice created successfully:', result);
+        
+        // Show success notification
+        showNotification('Invoice created successfully', 'success');
       } else {
-        await updateInvoice(invoice.id, invoiceData);
-        await fetchInvoices();
+        // Update existing invoice
+        console.log('Updating invoice:', invoice.id, invoiceData);
+        result = await updateInvoice(invoice.id, invoiceData);
+        console.log('Invoice updated successfully:', result);
+        
+        // Show success notification
+        showNotification('Invoice updated successfully', 'success');
       }
+      
+      // Make sure to fetch the updated invoices list
+      await fetchInvoices();
+      
+      // Close the modal after successful operation
       onClose();
+      
+      return result;
     } catch (error) {
       console.error('Error saving invoice:', error);
-      let errorMsg = 'Invoice creation failed.';
+      
+      // Format error message
+      let errorMsg = mode === 'create' ? 'Invoice creation failed.' : 'Invoice update failed.';
+      
+      // Handle different error formats
       if (error.response?.data) {
         const errorData = error.response.data;
         if (typeof errorData === 'object') {
-          errorMsg += '\n' + Object.entries(errorData)
+          // Format object errors
+          const detailedErrors = Object.entries(errorData)
             .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
             .join('\n');
+          
+          errorMsg += '\n' + detailedErrors;
         } else {
+          // String error
           errorMsg += ` ${errorData}`;
         }
       } else if (error.message) {
+        // Simple error message
         errorMsg += ` ${error.message}`;
       }
-      alert(errorMsg);
+      
+      // Show error notification instead of alert
+      showNotification(errorMsg, 'error', 5000);
+      
+      // Rethrow to allow parent components to handle
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   // Calculate totals when items change
   useEffect(() => {
     calculateTotals();
-  }, [formData.items, formData.vatIncluded]);
+  }, [formData.items, formData.vatIncluded, formData.discountPercentage]);
 
   const handlePrint = () => {
+    // Get the print content
     const printContents = document.getElementById('invoice-print-area').innerHTML;
     const printWindow = window.open('', '', 'height=900,width=800');
     printWindow.document.write(`
@@ -344,7 +414,7 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
             @media print {
               @page {
                 size: A4 portrait;
-                margin: 16mm 10mm 16mm 10mm;
+                margin: 5mm 5mm 5mm 5mm; /* Minimum margins */
               }
               html, body {
                 width: 100%;
@@ -353,44 +423,149 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                 padding: 0;
                 box-sizing: border-box;
                 background: white;
+                font-size: 12px; /* Slightly reduced font size */
               }
               #invoice-print-area, .p-6 {
                 width: 100% !important;
                 max-width: 100% !important;
                 box-sizing: border-box;
                 overflow: visible !important;
-                page-break-inside: avoid;
+                padding: 10px !important; /* Reduced padding */
+                margin: 0 !important;
+                page-break-before: avoid;
+                page-break-after: avoid;
               }
               .invoice-header {
                 display: block;
-                margin-bottom: 12px;
-                margin-top: 12px;
+                margin-bottom: 6px;
+                margin-top: 6px;
                 width: 100%;
                 page-break-inside: avoid;
+                text-align: center;
               }
               .invoice-header img {
-                max-height: 70px !important;
+                max-height: 55px !important; /* Further reduced height */
                 width: auto !important;
+                max-width: 80% !important;
                 object-fit: contain !important;
                 display: block;
                 margin: 0 auto;
               }
               .invoice-footer {
                 display: block;
-                margin-bottom: 20px;
-                margin-top: 20px;
+                margin-bottom: 6px;
+                margin-top: 6px;
                 width: 100%;
                 page-break-inside: avoid;
+                text-align: center;
+              }
+              .invoice-footer img {
+                max-height: 50px !important; /* Further reduced height */
+                max-width: 100% !important;
+                width: auto !important; /* Changed from width: 100% to width: auto */
+                object-fit: contain !important;
+                margin: 0 auto;
               }
               .modal-footer, .print-btn {
                 display: none !important;
               }
               table {
                 width: 100% !important;
-                page-break-inside: avoid;
+                font-size: 11px; /* Smaller font for table */
+                border-collapse: collapse;
               }
               tr, td, th {
                 page-break-inside: avoid;
+                padding: 4px !important; /* Reduced cell padding */
+              }
+              /* Improved spacing and form elements */
+              .grid {
+                grid-gap: 8px !important; /* Reduced grid gap */
+              }
+              .space-y-6 {
+                margin-top: 8px !important;
+                margin-bottom: 8px !important;
+              }
+              textarea, input {
+                padding: 3px !important;
+                font-size: 11px !important;
+              }
+              .py-3 {
+                padding-top: 4px !important;
+                padding-bottom: 4px !important;
+              }
+              /* Make sure content fits within page */
+              * {
+                overflow-wrap: break-word !important;
+                word-wrap: break-word !important;
+              }
+              
+              /* Table specific styles for better printing */
+              thead th {
+                font-size: 8px !important;
+                font-weight: bold !important;
+              }
+              
+              /* Make items table more compact */
+              textarea {
+                min-height: 30px !important;
+              }
+              
+              /* Ensure form fits on page */
+              form.space-y-3 > div, form.space-y-4 > div {
+                margin-top: 3px !important;
+                margin-bottom: 3px !important;
+              }
+              
+              /* Further reduce sizes for printing */
+              .text-lg {
+                font-size: 12px !important;
+              }
+              
+              .text-base {
+                font-size: 10px !important;
+              }
+              
+              .text-sm {
+                font-size: 8px !important;
+              }
+              
+              h3 {
+                font-size: 9px !important;
+                margin-bottom: 2px !important;
+              }
+              
+              /* Ensure all content scales properly */
+              img {
+                max-width: 100% !important;
+              }
+              
+              /* Make invoice items table fit better for printing */
+              .invoice-items-table {
+                font-size: 8px !important;
+              }
+              
+              .invoice-items-table td,
+              .invoice-items-table th {
+                padding: 1px 2px !important;
+              }
+              
+              .invoice-items-table textarea,
+              .invoice-items-table input {
+                font-size: 8px !important;
+                padding: 1px !important;
+                min-height: 20px !important;
+              }
+              
+              /* Reduce spacing in grid layouts */
+              .grid.grid-cols-2 {
+                grid-gap: 4px !important;
+              }
+              
+              /* Remove extra padding from button areas when printing */
+              .py-1, .py-2 {
+                padding-top: 2px !important;
+                padding-bottom: 2px !important;
               }
             }
           </style>
@@ -427,17 +602,56 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
   {/* Modal Body */}
   <div className="flex-1 overflow-y-auto">
           <div id="invoice-print-area">
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-4 space-y-3">
+              {/* Print-only styling */}
+              <style media="print">
+                {`
+                  .space-y-3 > * + * {
+                    margin-top: 0.5rem !important;
+                  }
+                  .p-4 {
+                    padding: 0.75rem !important;
+                  }
+                  .mb-3 {
+                    margin-bottom: 0.5rem !important;
+                  }
+                  .gap-4 {
+                    gap: 0.75rem !important;
+                  }
+                  .gap-3 {
+                    gap: 0.5rem !important;
+                  }
+                  input, textarea, select {
+                    font-size: 11px !important;
+                    padding: 2px 4px !important;
+                    height: auto !important;
+                    min-height: auto !important;
+                  }
+                  .h-8 {
+                    height: 1.5rem !important;
+                  }
+                  table {
+                    font-size: 11px !important;
+                  }
+                  .invoice-items-table th {
+                    padding: 2px 4px !important;
+                    font-size: 10px !important;
+                  }
+                  .invoice-items-table td {
+                    padding: 2px 4px !important;
+                  }
+                `}
+              </style>
               {/* Company Header */}
-              <div className="pb-4 invoice-header">
-                <img src="/assets/images/Regimark_Logo_page-0001-1752221173479.jpg" alt="Regimark Motors" className="mx-auto h-auto" />
+              <div className="pb-1 invoice-header">
+                <img src="/assets/images/Regimark_Logo_page-0001-1752221173479.jpg" alt="Regimark Motors" className="mx-auto h-auto" style={{maxHeight: '45px'}} />
               </div>
 
           {/* Invoice Details Section */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <h3 className="font-semibold text-gray-700 mb-3">Date & Time</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <h3 className="font-semibold text-gray-700 mb-2 text-sm">Date & Time</h3>
+              <div className="grid grid-cols-2 gap-2">
                 <Input
                   label="Date"
                   name="invoiceDate"
@@ -456,7 +670,7 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
               </div>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-700 mb-3">Invoice No</h3>
+              <h3 className="font-semibold text-gray-700 mb-2 text-sm">Invoice No</h3>
               <Input
                 name="invoiceNumber"
                 value={formData.invoiceNumber}
@@ -469,11 +683,11 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
 
           {/* Bill To Section */}
           <div>
-            <h3 className="font-semibold text-gray-700 mb-3">Bill to</h3>
+            <h3 className="font-semibold text-gray-700 mb-2 text-sm">Bill to</h3>
             
             {/* Customer Selection */}
-            <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
-              <div className="flex items-center gap-4 mb-3">
+            <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Select Existing Customer
@@ -623,53 +837,55 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
           {/* Items Table */}
           <div>
             <div className="overflow-x-auto">
-              <table className="w-full border border-gray-300">
+              <table className="w-full border border-gray-300 invoice-items-table">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="py-3 px-4 border-b border-gray-300 text-left font-semibold">No</th>
-                    <th className="py-3 px-4 border-b border-gray-300 text-left font-semibold">Product Description</th>
-                    <th className="py-3 px-4 border-b border-gray-300 text-left font-semibold">Price</th>
-                    <th className="py-3 px-4 border-b border-gray-300 text-left font-semibold">Quantity</th>
-                    <th className="py-3 px-4 border-b border-gray-300 text-left font-semibold">Amount</th>
-                    <th className="py-3 px-4 border-b border-gray-300"></th>
+                    <th className="py-1 px-1 border-b border-gray-300 text-left font-semibold text-sm">No</th>
+                    <th className="py-1 px-1 border-b border-gray-300 text-left font-semibold text-sm">Product Description</th>
+                    <th className="py-1 px-1 border-b border-gray-300 text-left font-semibold text-sm">Price</th>
+                    <th className="py-1 px-1 border-b border-gray-300 text-left font-semibold text-sm">Qty</th>
+                    <th className="py-1 px-1 border-b border-gray-300 text-left font-semibold text-sm">Amount</th>
+                    <th className="py-1 px-1 border-b border-gray-300"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {formData.items.map((item, index) => (
                     <tr key={item.id} className="border-b border-gray-200">
-                      <td className="py-3 px-4 text-center font-medium">{index + 1}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-1 px-2 text-center font-medium text-sm">{index + 1}</td>
+                      <td className="py-1 px-2">
                         <textarea
-                          className="w-full min-h-[60px] p-2 border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                          className="w-full min-h-[40px] p-1 border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                           value={item.description}
                           onChange={(e) => handleItemChange(index, "description", e.target.value)}
                           placeholder="Enter product/service description..."
                           required
                         />
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-1 px-2">
                         <Input
                           type="number"
                           step="0.01"
                           value={item.price}
                           onChange={(e) => handleItemChange(index, "price", e.target.value)}
                           placeholder="0.00"
+                          className="text-sm h-8"
                           required
                         />
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-1 px-2">
                         <Input
                           type="number"
                           step="1"
                           value={item.quantity}
                           onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
                           placeholder="1"
+                          className="text-sm h-8"
                         />
                       </td>
-                      <td className="py-3 px-4 font-medium">
+                      <td className="py-1 px-2 font-medium text-sm">
                         ${(parseFloat(item.amount) || 0).toFixed(2)}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-1 px-2">
                         {formData.items.length > 1 && (
                           <Button
                             type="button"
@@ -688,15 +904,15 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
               </table>
             </div>
             
-            <div className="mt-3">
+            <div className="mt-1">
               <Button
                 type="button"
                 onClick={addItem}
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-2"
+                className="flex items-center gap-1 py-1 px-2 text-xs"
               >
-                <Icon name="Plus" size={16} />
+                <Icon name="Plus" size={12} />
                 Add Item
               </Button>
             </div>
@@ -705,16 +921,16 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
           {/* Totals Section */}
           <div className="flex justify-end">
             {/* Save/Create Invoice Button - Far Right */}
-            <div className="flex flex-col w-80 space-y-2">
-              <div className="flex justify-end mb-4">
+            <div className="flex flex-col w-64 space-y-1">
+              <div className="flex justify-end mb-2">
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="bg-primary text-primary-foreground px-6 py-2 font-semibold"
+                  className="bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold"
                 >
                   {loading ? (
-                    <div className="flex items-center gap-2">
-                      <Icon name="Loader" size={16} className="animate-spin" />
+                    <div className="flex items-center gap-1">
+                      <Icon name="Loader" size={14} className="animate-spin" />
                       {mode === "create" ? "Creating..." : "Updating..."}
                     </div>
                   ) : (
@@ -722,33 +938,52 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                   )}
                 </Button>
               </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="font-medium">Sub-total</span>
-                <span className="font-medium">${formData.subtotal.toFixed(2)}</span>
+              <div className="flex justify-between py-1 border-b border-gray-200">
+                <span className="font-medium text-sm">Sub-total</span>
+                <span className="font-medium text-sm">${formData.subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between py-1 border-b border-gray-200">
+                <div className="flex items-center gap-1">
+                  <label htmlFor="discountPercentage" className="font-medium text-sm">Discount (%)</label>
+                  <input
+                    type="number"
+                    id="discountPercentage"
+                    min="0"
+                    max="100"
+                    value={formData.discountPercentage}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      discountPercentage: Math.min(Math.max(0, parseFloat(e.target.value) || 0), 100) 
+                    }))}
+                    className="w-14 px-1 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                    onBlur={() => calculateTotals()}
+                  />
+                </div>
+                <span className="font-medium text-sm">-${formData.discountAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-1">
                   <input
                     type="checkbox"
                     id="vatIncluded"
                     checked={formData.vatIncluded}
                     onChange={(e) => setFormData(prev => ({ ...prev, vatIncluded: e.target.checked }))}
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    className="w-3 h-3 text-primary border-gray-300 rounded focus:ring-primary"
                   />
-                  <label htmlFor="vatIncluded" className="font-medium">VAT (15%)</label>
+                  <label htmlFor="vatIncluded" className="font-medium text-sm">VAT (15%)</label>
                 </div>
-                <span className="font-medium">${formData.vatAmount.toFixed(2)}</span>
+                <span className="font-medium text-sm">${formData.vatAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between py-3 border-t-2 border-gray-300">
-                <span className="font-bold text-lg">Total Amount</span>
-                <span className="font-bold text-lg">${formData.totalAmount.toFixed(2)}</span>
+              <div className="flex justify-between py-2 border-t border-gray-300">
+                <span className="font-bold text-base">Total Amount</span>
+                <span className="font-bold text-base">${formData.totalAmount.toFixed(2)}</span>
               </div>
             </div>
           </div>
 
               {/* Footer */}
-              <div className="pt-6 border-t border-gray-200 invoice-footer">
-                <img src="/assets/images/invoice-footer.png" alt="Regimark Motors Services" className="w-full h-auto" />
+              <div className="pt-1 border-t border-gray-200 invoice-footer">
+                <img src="/assets/images/invoice-footer.jpeg" alt="Regimark Motors Services" className="h-auto mx-auto" style={{maxHeight: '40px', maxWidth: '100%'}} />
               </div>
             </form>
           </div>
@@ -756,6 +991,15 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
 
   {/* Modal Footer */}
   <div className="flex flex-col gap-3 p-6 border-t border-gray-200 bg-gray-50 modal-footer" style={{ flexShrink: 0 }}>
+          {loading && (
+            <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-md mb-2 flex items-center">
+              <svg className="animate-spin h-5 w-5 mr-3 text-blue-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Saving invoice... Please wait
+            </div>
+          )}
           <div className="flex items-center gap-4 mb-2 justify-between">
             <div className="flex items-center gap-4">
               <span className="font-medium">Share Invoice:</span>

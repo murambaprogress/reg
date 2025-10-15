@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { DropdownMenu } from '../../../components/ui';
 import { useInventory } from '../InventoryContext';
 
 const InventoryTable = ({ 
@@ -14,7 +15,7 @@ const InventoryTable = ({
   sortConfig,
   onSort 
 }) => {
-  const { exportParts, fetchPartHistory, prompt, openHistory, reorderPart } = useInventory();
+  const { exportParts, fetchPartHistory, prompt, openHistory, reorderPart, deletePart, userRole } = useInventory();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -67,10 +68,12 @@ const InventoryTable = ({
             <Button variant="outline" iconName="Download" onClick={() => exportParts().catch(() => window.__SHOW_TOAST && window.__SHOW_TOAST('Export failed', 'error'))}>
               Export CSV
             </Button>
-            {/* Scan Barcode removed */}
-            <Button variant="primary" iconName="Plus" onClick={() => onEditPart(null)}>
-              Add Part
-            </Button>
+            {/* Add Part button only shown for admin/supervisor */}
+            {(userRole === 'admin' || userRole === 'supervisor') && (
+              <Button variant="primary" iconName="Plus" onClick={() => onEditPart(null)}>
+                Add Part
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -107,7 +110,7 @@ const InventoryTable = ({
                   </button>
                 </th>
               ))}
-              <th className="p-4 text-left">
+              <th className="p-4 text-right">
                 <span className="text-sm font-heading-medium text-text-primary">Actions</span>
               </th>
             </tr>
@@ -160,52 +163,65 @@ const InventoryTable = ({
                     </span>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="ghost"
-                        onClick={() => onEditPart(part)}
-                        className="p-2"
-                      >
-                        <Icon name="Edit" size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => onAssignToJob(part)}
-                        className="p-2"
-                      >
-                        <Icon name="UserPlus" size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          // prompt for quantity then optional notes
-                            prompt({ title: 'Quantity to add', placeholder: 'e.g. 10', defaultValue: '1' }).then(val => {
-                            const qty = parseInt(val) || 0;
-                            if (!qty) return;
-                            prompt({ title: 'Notes (optional)', placeholder: 'Supplier, batch, notes', defaultValue: '' }).then(notes => {
-                              reorderPart({ partId: part.id, quantity: qty, notes }).then(() => window.__SHOW_TOAST && window.__SHOW_TOAST('Stock added', 'success')).catch(err => {
-                                const msg = (err && err.message) ? err.message : 'Failed to add stock';
-                                window.__SHOW_TOAST && window.__SHOW_TOAST(msg, 'error');
+                    <div className="flex items-center justify-end">
+                      <DropdownMenu
+                        size="sm"
+                        items={[
+                          // View History - available for all users
+                          {
+                            label: "View History",
+                            icon: "History",
+                            onClick: () => {
+                              fetchPartHistory(part.id).then(data => {
+                                const entries = Array.isArray(data) ? data : [];
+                                openHistory('Part History', entries);
+                              }).catch(() => window.__SHOW_TOAST && window.__SHOW_TOAST('Failed to fetch history', 'error'));
+                            }
+                          },
+                          // Edit Part - only for admin and supervisor
+                          ...(userRole === 'admin' || userRole === 'supervisor' ? [{
+                            label: "Edit Part",
+                            icon: "Edit",
+                            onClick: () => onEditPart(part)
+                          }] : []),
+                          // Assign to Job - for all authenticated users
+                          ...(userRole ? [{
+                            label: "Assign to Job",
+                            icon: "UserPlus",
+                            onClick: () => onAssignToJob(part)
+                          }] : []),
+                          // Add Stock - only for admin and supervisor
+                          ...(userRole === 'admin' || userRole === 'supervisor' ? [{
+                            label: "Add Stock",
+                            icon: "PlusSquare",
+                            onClick: () => {
+                              // prompt for quantity then optional notes
+                              prompt({ title: 'Quantity to add', placeholder: 'e.g. 10', defaultValue: '1' }).then(val => {
+                              const qty = parseInt(val) || 0;
+                              if (!qty) return;
+                              prompt({ title: 'Notes (optional)', placeholder: 'Supplier, batch, notes', defaultValue: '' }).then(notes => {
+                                reorderPart({ partId: part.id, quantity: qty, notes }).then(() => window.__SHOW_TOAST && window.__SHOW_TOAST('Stock added', 'success')).catch(err => {
+                                  const msg = (err && err.message) ? err.message : 'Failed to add stock';
+                                  window.__SHOW_TOAST && window.__SHOW_TOAST(msg, 'error');
+                                });
                               });
                             });
-                          });
-                        }}
-                        className="p-2"
-                      >
-                        <Icon name="PlusSquare" size={16} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          fetchPartHistory(part.id).then(data => {
-                            const entries = Array.isArray(data) ? data : [];
-                            openHistory('Part History', entries);
-                          }).catch(() => window.__SHOW_TOAST && window.__SHOW_TOAST('Failed to fetch history', 'error'));
-                        }}
-                        className="p-2"
-                      >
-                        <Icon name="History" size={16} />
-                      </Button>
+                            }
+                          }] : []),
+                          // Delete Part - only for admin and supervisor
+                          ...(userRole === 'admin' || userRole === 'supervisor' ? [{
+                            label: "Delete Part",
+                            icon: "Trash2",
+                            color: "text-error",
+                            onClick: () => {
+                              if (window.confirm(`Are you sure you want to delete ${part.part_number || part.partNumber}?`)) {
+                                deletePart(part.id)
+                                  .catch(() => window.__SHOW_TOAST && window.__SHOW_TOAST('Failed to delete part', 'error'));
+                              }
+                            }
+                          }] : [])
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>

@@ -36,7 +36,21 @@ const FileUpload = ({
     const validFiles = [];
     const errors = [];
 
+    if (!files || files.length === 0) {
+      errors.push('No files selected');
+      return { validFiles, errors };
+    }
+
     Array.from(files).forEach(file => {
+      // Log file details for debugging
+      console.log(`Validating file: ${file.name}, Type: ${file.type}, Size: ${file.size} bytes`);
+      
+      // Check if the file is empty
+      if (file.size === 0) {
+        errors.push(`File "${file.name}" is empty`);
+        return;
+      }
+      
       // Check file size
       if (file.size > maxSize) {
         errors.push(`File "${file.name}" exceeds maximum size of ${maxSize / 1024 / 1024}MB`);
@@ -47,13 +61,21 @@ const FileUpload = ({
       if (accept) {
         const acceptedTypes = accept.split(',').map(type => type.trim());
         const fileType = file.type;
-        const fileExtension = '.' + file.name.split('.').pop();
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
         
-        if (!acceptedTypes.some(type => 
-          fileType.match(type.replace('*', '.*')) || 
-          fileExtension.match(type.replace('*', '.*'))
-        )) {
-          errors.push(`File "${file.name}" has an unsupported format`);
+        const isAcceptedType = acceptedTypes.some(type => {
+          // Handle MIME types
+          if (type.includes('/')) {
+            return fileType === type || fileType.match(type.replace('*', '.*'));
+          }
+          // Handle file extensions
+          else {
+            return type === fileExtension || fileExtension.match(type.replace('*', '.*'));
+          }
+        });
+        
+        if (!isAcceptedType) {
+          errors.push(`File "${file.name}" has an unsupported format. Accepted formats: ${accept}`);
           return;
         }
       }
@@ -97,8 +119,12 @@ const FileUpload = ({
 
   const handleInputChange = (e) => {
     const files = e.target.files;
-    if (files) {
+    if (files && files.length > 0) {
+      console.log('Files selected through input:', files.length);
+      console.log('First file type:', files[0].type);
       handleFiles(files);
+    } else {
+      console.warn('No files selected in input change');
     }
   };
 

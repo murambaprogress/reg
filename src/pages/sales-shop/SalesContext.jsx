@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useInventory } from '../../pages/inventory-management/InventoryContext';
 import { useUser } from '../../components/UserContext';
+import { useToast } from '../../components/ui/Toast';
+import { getBaseUrl } from '../../utils/config';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const API_BASE = getBaseUrl();
 
 const getAuthToken = () => { try { return localStorage.getItem('token'); } catch (e) { return null; } };
 
@@ -14,6 +16,7 @@ export const SalesProvider = ({ children }) => {
   const { user, loading: authLoading } = useUser();
   const inventoryContext = useInventory();
   const { parts = [], setParts = () => {} } = inventoryContext || {};
+  const showToast = useToast();
   
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +52,7 @@ export const SalesProvider = ({ children }) => {
         setSales([]); // Reset sales on error
         setError(err.message);
         console.error('Error fetching sales:', err);
+        showToast(err.message || 'Failed to fetch sales data', 'error');
       } finally {
         setLoading(false);
       }
@@ -100,9 +104,11 @@ export const SalesProvider = ({ children }) => {
           : p;
       });
       setParts(updatedParts);
+      showToast('Sale created successfully', 'success');
       return newSale;
     } catch (err) {
       console.error('Error adding sale:', err);
+      showToast(err.message || 'Failed to create sale', 'error');
       throw err;
     }
   };
@@ -140,9 +146,11 @@ export const SalesProvider = ({ children }) => {
         await inventoryContext.fetchParts();
       }
 
+      showToast('Sale updated successfully', 'success');
       return updatedSale;
     } catch (err) {
       console.error('Error editing sale:', err);
+      showToast(err.message || 'Failed to update sale', 'error');
       throw err;
     }
   };
@@ -166,8 +174,10 @@ export const SalesProvider = ({ children }) => {
         });
         setParts(updatedParts);
       }
+      showToast('Sale removed successfully', 'success');
     } catch (e) {
       console.warn('Failed to restore inventory for removed sale', e);
+      showToast('Sale removed but failed to update inventory', 'error');
     }
   };
 

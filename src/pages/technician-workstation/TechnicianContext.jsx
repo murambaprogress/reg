@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getBaseUrl } from '../../utils/config';
 
 const TechnicianContext = createContext();
 
@@ -17,9 +18,8 @@ export const TechnicianProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [notifications, setNotifications] = useState([]);
 
-  // Prefer explicit env var, fallback to relative '/api' so dev proxy serves responses
-  let API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
-  if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
+  // Use the config helper to get the PythonAnywhere API base URL in production
+  const API_BASE_URL = getBaseUrl();
 
   // Safe JSON parser to surface HTML / unexpected responses clearly
   const safeParseJSON = async (response) => {

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useToast as useGlobalToast } from '../../components/ui/Toast';
+import { getBaseUrl } from '../../utils/config';
 
 // Constants
-const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const API_BASE = getBaseUrl();
 const DEFAULT_ICON = 'Package';
 const INITIAL_PROMPT_STATE = { 
   open: false, 
@@ -20,7 +21,9 @@ const INITIAL_HISTORY_STATE = {
 // Utility functions
 const getAuthToken = () => {
   try {
-    return localStorage.getItem('token');
+    const token = localStorage.getItem('token');
+    console.log('Retrieved auth token:', token ? 'Token exists' : 'No token found');
+    return token;
   } catch (error) {
     console.warn('Failed to retrieve auth token:', error);
     return null;
@@ -89,11 +92,18 @@ const useApiCall = (showToast) => {
     const token = getAuthToken();
     const headers = createAuthHeaders(token);
     
+    console.log('Making API call to:', url);
+    console.log('HTTP Method:', options.method || 'GET');
+    console.log('Headers:', headers);
+    console.log('Request body:', options.body ? 'Present' : 'None');
+    
     try {
       const response = await fetch(url, {
         ...options,
         headers: { ...headers, ...options.headers }
       });
+      
+      console.log('Response status:', response.status, response.statusText);
 
       const data = await safeJsonParse(response);
 
@@ -126,6 +136,7 @@ export const InventoryProvider = ({ children }) => {
   const [historyState, setHistoryState] = useState(INITIAL_HISTORY_STATE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   // Toast functionality
   const showToast = useMemo(() => {
@@ -146,6 +157,13 @@ export const InventoryProvider = ({ children }) => {
       setSuppliers([]);
     }
   }, [apiCall]);
+
+  // Get user role from localStorage
+  useEffect(() => {
+    const role = localStorage.getItem('role');
+    console.log('User role from localStorage:', role);
+    setUserRole(role);
+  }, []);
 
   // Fetch inventory data
   const fetchInventoryData = useCallback(async () => {
@@ -217,7 +235,7 @@ export const InventoryProvider = ({ children }) => {
   // Fetch transactions
   const fetchTransactions = useCallback(async () => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/transactions`);
+      const data = await apiCall(`${API_BASE}/inventory/transactions/`);
       setRecentTransactions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.warn('Failed to fetch transactions:', error);
@@ -318,7 +336,7 @@ export const InventoryProvider = ({ children }) => {
   // API operations
   const refreshParts = useCallback(async () => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/parts`);
+      const data = await apiCall(`${API_BASE}/inventory/parts/`);
       if (Array.isArray(data)) {
         const normalizedParts = data.map(normalizePartData);
         setParts(normalizedParts);
@@ -333,8 +351,8 @@ export const InventoryProvider = ({ children }) => {
   const searchParts = useCallback(async (query) => {
     try {
       const url = query 
-        ? `${API_BASE}/inventory/parts?search=${encodeURIComponent(query)}`
-        : `${API_BASE}/inventory/parts`;
+        ? `${API_BASE}/inventory/parts/?search=${encodeURIComponent(query)}`
+        : `${API_BASE}/inventory/parts/`;
       
       const data = await apiCall(url);
       
@@ -352,6 +370,16 @@ export const InventoryProvider = ({ children }) => {
 
   const createPart = useCallback(async (payload) => {
     try {
+      // Check role before creating
+      if (userRole !== 'admin' && userRole !== 'supervisor') {
+        const errorMessage = 'Only admin and supervisor can create parts';
+        console.error(errorMessage);
+        if (showToast) {
+          showToast(errorMessage, 'error');
+        }
+        throw new Error(errorMessage);
+      }
+
       const data = await apiCall(`${API_BASE}/inventory/parts/`, {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -366,13 +394,27 @@ export const InventoryProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Failed to create part:', error);
+      if (showToast) {
+        showToast(error.message || 'Failed to create part', 'error');
+      }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast]);
+  }, [apiCall, refreshParts, showToast, userRole]);
 
   const updatePart = useCallback(async (id, payload) => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/parts/${id}`, {
+      // Check role before updating
+      if (userRole !== 'admin' && userRole !== 'supervisor') {
+        const errorMessage = 'Only admin and supervisor can update parts';
+        console.error(errorMessage);
+        if (showToast) {
+          showToast(errorMessage, 'error');
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Make sure the URL ends with a trailing slash to avoid Django APPEND_SLASH issues
+      const data = await apiCall(`${API_BASE}/inventory/parts/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(payload)
       });
@@ -386,12 +428,25 @@ export const InventoryProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Failed to update part:', error);
+      if (showToast) {
+        showToast(error.message || 'Failed to update part', 'error');
+      }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast]);
+  }, [apiCall, refreshParts, showToast, userRole]);
 
   const assignPart = useCallback(async ({ partId, jobId, quantity, notes }) => {
     try {
+      // Check role before assigning
+      if (!userRole) {
+        const errorMessage = 'You must be logged in to assign parts';
+        console.error(errorMessage);
+        if (showToast) {
+          showToast(errorMessage, 'error');
+        }
+        throw new Error(errorMessage);
+      }
+
       const data = await apiCall(`${API_BASE}/inventory/assign-to-job/`, {
         method: 'POST',
         body: JSON.stringify({ partId, jobId, quantity, notes })
@@ -406,13 +461,26 @@ export const InventoryProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Failed to assign part:', error);
+      if (showToast) {
+        showToast(error.message || 'Failed to assign part', 'error');
+      }
       throw error;
     }
-  }, [apiCall, refreshParts, fetchTransactions, showToast]);
+  }, [apiCall, refreshParts, fetchTransactions, showToast, userRole]);
 
   const reorderPart = useCallback(async ({ partId, quantity, notes } = {}) => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/reorder`, {
+      // Check role before reordering
+      if (userRole !== 'admin' && userRole !== 'supervisor') {
+        const errorMessage = 'Only admin and supervisor can reorder parts';
+        console.error(errorMessage);
+        if (showToast) {
+          showToast(errorMessage, 'error');
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await apiCall(`${API_BASE}/inventory/reorder/`, {
         method: 'POST',
         body: JSON.stringify({ partId, quantity, notes })
       });
@@ -426,13 +494,52 @@ export const InventoryProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Failed to reorder part:', error);
+      if (showToast) {
+        showToast(error.message || 'Failed to reorder part', 'error');
+      }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast]);
+  }, [apiCall, refreshParts, showToast, userRole]);
+  
+  const deletePart = useCallback(async (id) => {
+    try {
+      // Check role before deleting
+      if (userRole !== 'admin' && userRole !== 'supervisor') {
+        const errorMessage = 'Only admin and supervisor can delete parts';
+        console.error(errorMessage);
+        if (showToast) {
+          showToast(errorMessage, 'error');
+        }
+        throw new Error(errorMessage);
+      }
+
+      console.log(`Attempting to delete part with ID: ${id}`);
+      // Make sure the URL ends with a trailing slash to avoid Django APPEND_SLASH issues
+      await apiCall(`${API_BASE}/inventory/parts/${id}/`, {
+        method: 'DELETE'
+      });
+      console.log(`Delete API call completed for part ID: ${id}`);
+
+      await refreshParts();
+      
+      if (showToast) {
+        showToast('Part deleted successfully', 'success');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to delete part:', error);
+      if (showToast) {
+        showToast(error.message || 'Failed to delete part', 'error');
+      }
+      throw error;
+    }
+  }, [apiCall, refreshParts, showToast, userRole]);
 
   const fetchPartHistory = useCallback(async (partId) => {
     try {
-      return await apiCall(`${API_BASE}/inventory/parts/${partId}/history`);
+      // Make sure the URL ends with a trailing slash to avoid Django APPEND_SLASH issues
+      return await apiCall(`${API_BASE}/inventory/parts/${partId}/history/`);
     } catch (error) {
       console.error('Failed to fetch part history:', error);
       throw error;
@@ -444,7 +551,7 @@ export const InventoryProvider = ({ children }) => {
       const token = getAuthToken();
       const headers = createAuthHeaders(token);
       
-      const response = await fetch(`${API_BASE}/inventory/export`, { headers });
+      const response = await fetch(`${API_BASE}/inventory/export/`, { headers });
       
       if (!response.ok) {
         const data = await safeJsonParse(response);
@@ -485,6 +592,7 @@ export const InventoryProvider = ({ children }) => {
     recentTransactions,
     loading,
     error,
+    userRole,
     
     // Prompt state
     promptState,
@@ -496,6 +604,7 @@ export const InventoryProvider = ({ children }) => {
     searchParts,
     createPart,
     updatePart,
+    deletePart,
     assignPart,
     reorderPart,
     fetchPartHistory,
@@ -518,12 +627,14 @@ export const InventoryProvider = ({ children }) => {
     recentTransactions,
     loading,
     error,
+    userRole,
     promptState,
     historyState,
     refreshParts,
     searchParts,
     createPart,
     updatePart,
+    deletePart,
     assignPart,
     reorderPart,
     fetchPartHistory,

@@ -18,15 +18,23 @@ export const fetchInvoice = async (id) => {
 
 
 export const createInvoice = async (invoiceData) => {
-  const { data } = await axios.post('/billing/invoices/', invoiceData);
-  return data;
+  try {
+    const { data } = await axios.post('/billing/invoices/', invoiceData);
+    return data;
+  } catch (error) {
+    console.error('API Error creating invoice:', error.response?.data || error.message);
+    throw error;
+  }
 };
 
-
-
 export const updateInvoice = async (id, invoiceData) => {
-  const { data } = await axios.put(`/billing/invoices/${id}/`, invoiceData);
-  return data;
+  try {
+    const { data } = await axios.put(`/billing/invoices/${id}/`, invoiceData);
+    return data;
+  } catch (error) {
+    console.error('API Error updating invoice:', error.response?.data || error.message);
+    throw error;
+  }
 };
 
 export const deleteInvoice = async (id) => {
@@ -61,15 +69,43 @@ export const createDebtor = async (debtorData) => {
 
 
 export const importDebtors = async (formData) => {
-  console.log('Importing debtors with formData:', formData.get('file'));
+  const file = formData.get('file');
+  console.log('Importing debtors with formData:', file ? file.name : 'No file found');
+  
+  // Validate the file exists in the formData
+  if (!file) {
+    console.error('No file found in formData');
+    throw new Error('No file selected for upload');
+  }
+
+  // Validate file type
+  const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  if (!allowedTypes.includes(file.type) && !file.name.endsWith('.csv')) {
+    console.error('Invalid file type:', file.type);
+    throw new Error('Invalid file format. Please upload a CSV or Excel file.');
+  }
+  
   try {
+    // Add content type header for proper multipart handling
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    };
+    
     // Use the correct endpoint for debtor imports
-    const { data } = await axios.post('/billing/debtors/import_excel/', formData);
+    console.log('Sending import request to server...');
+    const { data } = await axios.post('/billing/debtors/import_excel/', formData, config);
     console.log('Import response:', data);
     return data;
   } catch (error) {
     // Normalize error logging to show server response if present
-    console.error('Import error:', error?.response?.data || error?.message || error);
+    const errorMessage = error?.response?.data?.error || 
+                        error?.response?.data?.detail || 
+                        error?.message || 
+                        'Unknown error during import';
+                        
+    console.error('Import error:', errorMessage);
     throw error;
   }
 };
@@ -112,7 +148,23 @@ export const downloadDebtorTemplate = async () => {
 
 
 export const importDebtorsExcel = async (formData) => {
-  return importDebtors(formData); // Use the same function for consistency
+  console.log('Using dedicated importDebtorsExcel function');
+  
+  // This is a backup function in case the main import endpoint has issues
+  try {
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    };
+    
+    const { data } = await axios.post('/billing/debtors/import_excel/', formData, config);
+    console.log('Excel import response:', data);
+    return data;
+  } catch (error) {
+    console.error('Excel import error:', error?.response?.data || error?.message || error);
+    throw error;
+  }
 };
 
 

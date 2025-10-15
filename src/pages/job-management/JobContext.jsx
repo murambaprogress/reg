@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getBaseUrl } from '../../utils/config';
 
 const JobContext = createContext();
 
@@ -17,7 +18,8 @@ export const JobProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
+  // Import API base URL from config - will use PythonAnywhere in production
+  const API_BASE_URL = getBaseUrl();
 
   // Get auth token from localStorage
   const getAuthToken = () => {

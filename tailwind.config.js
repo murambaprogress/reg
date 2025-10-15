@@ -28,6 +28,28 @@ module.exports = {
         'text-primary': '#111827',
         'text-secondary': '#6B7280',
         
+      // Add animations for notifications
+      animation: {
+        'slideIn': 'slideIn 0.3s ease-out forwards',
+        'slideOut': 'slideOut 0.3s ease-in forwards',
+        'fadeOut': 'fadeOut 3s ease-in-out forwards',
+      },
+      keyframes: {
+        slideIn: {
+          '0%': { transform: 'translateX(100%)', opacity: 0 },
+          '100%': { transform: 'translateX(0)', opacity: 1 },
+        },
+        slideOut: {
+          '0%': { transform: 'translateX(0)', opacity: 1 },
+          '100%': { transform: 'translateX(100%)', opacity: 0 },
+        },
+        fadeOut: {
+          '0%': { opacity: 1 },
+          '80%': { opacity: 1 },
+          '100%': { opacity: 0 },
+        },
+      },
+        
         // Status Colors
         'success': '#10B981',
         'success-foreground': '#FFFFFF',

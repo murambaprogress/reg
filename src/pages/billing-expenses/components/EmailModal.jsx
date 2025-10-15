@@ -27,7 +27,7 @@ Invoice Details:
 - Total Amount: $${invoice.total_amount}
 - Status: ${invoice.status}
 
-If you have any questions, please contact us at rmakambe@gmail.com or +263 772 980 161.
+If you have any questions, please contact us at tinashe@regimarkauto.co.zw or +263 772 980 161.
 
 Thank you for your business!
 

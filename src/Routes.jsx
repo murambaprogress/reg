@@ -3,6 +3,7 @@ import { BrowserRouter, Routes as RouterRoutes, Route, Navigate, useLocation, Ou
 import ScrollToTop from "components/ScrollToTop";
 import ErrorBoundary from "components/ErrorBoundary";
 import ThemeProvider from "components/ui/ThemeProvider";
+import { ToastProvider } from "components/ui/Toast";
 import { TechnicianSyncProvider } from "./pages/technician-workstation/TechnicianSyncContext";
 import Footer from 'components/ui/Footer';
 import { UserProvider } from "./components/UserContext";
@@ -96,37 +97,39 @@ const AuthRedirect = ({ element }) => {
 const Routes = () => {
   return (
     <BrowserRouter>
-      <TechnicianSyncProvider>
-        <UserProvider>
-          <InventoryProvider>
-            <SalesProvider>
+      <ErrorBoundary>
+        <ToastProvider>
+          <UserProvider>
+            <TechnicianSyncProvider>
               <ThemeProvider>
-                <ErrorBoundary>
-                  <ScrollToTop />
-                  <RouterRoutes>
-              {/* Root path shows login for unauthenticated users */}
-              <Route path="/" element={<AuthRedirect element={<Login />} />} />
-              <Route path="/login" element={<Navigate to="/" replace />} />
-              <Route path="/dashboard-overview" element={<ProtectedRoute element={<BillingProvider><DashboardOverview /></BillingProvider>} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/inventory-management" element={<ProtectedRoute element={<InventoryManagement />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/reports-analytics" element={<ProtectedRoute element={<ReportsAnalytics />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/technician-workstation" element={<ProtectedRoute element={<TechnicianProvider><TechnicianWorkstation /></TechnicianProvider>} allowedRoles={["technician"]} />} />
-              <Route path="/job-management" element={<ProtectedRoute element={<JobManagement />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/customer-management" element={<ProtectedRoute element={<CustomerManagement />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/billing-expenses" element={<ProtectedRoute element={<BillingExpenses />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/debtors-management" element={<ProtectedRoute element={<DebtorsManagementPage />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/supplier-management" element={<ProtectedRoute element={<SupplierManagement />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/sales-shop" element={<ProtectedRoute element={<SalesShop />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="/admin-dashboard" element={<ProtectedRoute element={<AdminDashboard />} allowedRoles={["admin","supervisor"]} />} />
-              <Route path="*" element={<NotFound />} />
-                  </RouterRoutes>
-                  <Footer />
-                </ErrorBoundary>
+                <InventoryProvider>
+                  <SalesProvider>
+                    <ScrollToTop />
+                    <RouterRoutes>
+                      {/* Root path shows login for unauthenticated users */}
+                      <Route path="/" element={<AuthRedirect element={<Login />} />} />
+                      <Route path="/login" element={<Navigate to="/" replace />} />
+                      <Route path="/dashboard-overview" element={<ProtectedRoute element={<BillingProvider><DashboardOverview /></BillingProvider>} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/inventory-management" element={<ProtectedRoute element={<InventoryManagement />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/reports-analytics" element={<ProtectedRoute element={<ReportsAnalytics />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/technician-workstation" element={<ProtectedRoute element={<TechnicianProvider><TechnicianWorkstation /></TechnicianProvider>} allowedRoles={["technician"]} />} />
+                      <Route path="/job-management" element={<ProtectedRoute element={<JobManagement />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/customer-management" element={<ProtectedRoute element={<CustomerManagement />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/billing-expenses" element={<ProtectedRoute element={<BillingExpenses />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/debtors-management" element={<ProtectedRoute element={<DebtorsManagementPage />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/supplier-management" element={<ProtectedRoute element={<SupplierManagement />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/sales-shop" element={<ProtectedRoute element={<SalesShop />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="/admin-dashboard" element={<ProtectedRoute element={<AdminDashboard />} allowedRoles={["admin","supervisor"]} />} />
+                      <Route path="*" element={<NotFound />} />
+                    </RouterRoutes>
+                    <Footer />
+                  </SalesProvider>
+                </InventoryProvider>
               </ThemeProvider>
-            </SalesProvider>
-          </InventoryProvider>
-        </UserProvider>
-      </TechnicianSyncProvider>
+            </TechnicianSyncProvider>
+          </UserProvider>
+        </ToastProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 };

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getBaseUrl } from '../../utils/config';
 
 const BillingContext = createContext();
 
@@ -22,7 +23,8 @@ export const BillingProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api';
+  // Import API base URL from config - will use PythonAnywhere in production
+  const API_BASE_URL = getBaseUrl();
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {
@@ -390,22 +392,88 @@ export const BillingProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-  const response = await fetch(`${API_BASE_URL}/billing/invoices/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(invoiceData),
-      });
+      // Log the data being sent
+      console.log('Creating invoice with data:', invoiceData);
       
-      if (!response.ok) {
-        throw new Error('Failed to create invoice');
+      // Enhanced validation for invoice data
+      if (!invoiceData.invoice_number) {
+        throw new Error('Invoice number is required');
       }
       
-      const newInvoice = await response.json();
-      setInvoices(prev => [newInvoice, ...prev]);
-      return newInvoice;
+      if (!Array.isArray(invoiceData.items) || invoiceData.items.length === 0) {
+        throw new Error('Invoice must contain at least one item');
+      }
+      
+      // Validate required fields in invoice items
+      invoiceData.items.forEach((item, index) => {
+        if (!item.description) {
+          throw new Error(`Item ${index + 1} description is required`);
+        }
+        if (!item.quantity || parseFloat(item.quantity) <= 0) {
+          throw new Error(`Item ${index + 1} must have a valid quantity`);
+        }
+        if (!item.unit_price || parseFloat(item.unit_price) < 0) {
+          throw new Error(`Item ${index + 1} must have a valid price`);
+        }
+      });
+      
+      // Use the API function from src/api/billing.js
+      try {
+        const newInvoice = await window.billingApi.createInvoice(invoiceData);
+        
+        // Success - add to invoice list
+        console.log('Invoice created successfully:', newInvoice);
+        
+        // Update the invoices list with the new invoice
+        setInvoices(prev => [newInvoice, ...prev]);
+        
+        // Display success notification
+        const event = new CustomEvent('showNotification', { 
+          detail: {
+            type: 'success',
+            message: 'Invoice created successfully',
+            duration: 3000
+          }
+        });
+        window.dispatchEvent(event);
+        
+        // Return the created invoice
+        return newInvoice;
+      } catch (apiError) {
+        // Handle API error specifically
+        console.error('API Error:', apiError);
+        
+        // Extract error details from the API response
+        const errorDetails = apiError.response?.data;
+        let errorMessage = 'Failed to create invoice';
+        
+        if (errorDetails) {
+          if (typeof errorDetails === 'object') {
+            // Format nested error objects into readable message
+            errorMessage += ': ' + Object.entries(errorDetails)
+              .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+              .join('; ');
+          } else if (typeof errorDetails === 'string') {
+            errorMessage += ': ' + errorDetails;
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
     } catch (err) {
       setError(err.message);
       console.error('Error creating invoice:', err);
+      
+      // Display error notification
+      const event = new CustomEvent('showNotification', { 
+        detail: {
+          type: 'error',
+          message: err.message || 'Failed to create invoice',
+          duration: 5000
+        }
+      });
+      window.dispatchEvent(event);
+      
       throw err;
     } finally {
       setLoading(false);
@@ -444,24 +512,92 @@ export const BillingProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/billing/invoices/${invoiceId}/`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(invoiceData),
-      });
+      // Log the data being sent for update
+      console.log(`Updating invoice ${invoiceId} with data:`, invoiceData);
       
-      if (!response.ok) {
-        throw new Error('Failed to update invoice');
+      // Enhanced validation
+      if (!invoiceId) {
+        throw new Error('Invoice ID is required for updates');
       }
       
-      const updatedInvoice = await response.json();
-      setInvoices(prev => prev.map(invoice => 
-        invoice.id === invoiceId ? updatedInvoice : invoice
-      ));
-      return updatedInvoice;
+      if (!invoiceData.invoice_number) {
+        throw new Error('Invoice number is required');
+      }
+      
+      if (!Array.isArray(invoiceData.items) || invoiceData.items.length === 0) {
+        throw new Error('Invoice must contain at least one item');
+      }
+      
+      // Validate required fields in invoice items
+      invoiceData.items.forEach((item, index) => {
+        if (!item.description) {
+          throw new Error(`Item ${index + 1} description is required`);
+        }
+        if (!item.quantity || parseFloat(item.quantity) <= 0) {
+          throw new Error(`Item ${index + 1} must have a valid quantity`);
+        }
+        if (!item.unit_price || parseFloat(item.unit_price) < 0) {
+          throw new Error(`Item ${index + 1} must have a valid price`);
+        }
+      });
+      
+      // Use the API function from src/api/billing.js
+      try {
+        const updatedInvoice = await window.billingApi.updateInvoice(invoiceId, invoiceData);
+        
+        // Success - update in invoice list
+        console.log('Invoice updated successfully:', updatedInvoice);
+        
+        setInvoices(prev => prev.map(invoice => 
+          invoice.id === invoiceId ? updatedInvoice : invoice
+        ));
+        
+        // Display success notification
+        const event = new CustomEvent('showNotification', { 
+          detail: {
+            type: 'success',
+            message: 'Invoice updated successfully',
+            duration: 3000
+          }
+        });
+        window.dispatchEvent(event);
+        
+        return updatedInvoice;
+      } catch (apiError) {
+        // Handle API error specifically
+        console.error('API Error:', apiError);
+        
+        // Extract error details from the API response
+        const errorDetails = apiError.response?.data;
+        let errorMessage = 'Failed to update invoice';
+        
+        if (errorDetails) {
+          if (typeof errorDetails === 'object') {
+            // Format nested error objects into readable message
+            errorMessage += ': ' + Object.entries(errorDetails)
+              .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+              .join('; ');
+          } else if (typeof errorDetails === 'string') {
+            errorMessage += ': ' + errorDetails;
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
     } catch (err) {
       setError(err.message);
       console.error('Error updating invoice:', err);
+      
+      // Display error notification
+      const event = new CustomEvent('showNotification', { 
+        detail: {
+          type: 'error',
+          message: err.message || 'Failed to update invoice',
+          duration: 5000
+        }
+      });
+      window.dispatchEvent(event);
+      
       throw err;
     } finally {
       setLoading(false);

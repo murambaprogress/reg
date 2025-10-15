@@ -231,8 +231,19 @@ export const InvoiceModal = ({
           </div>
 
           {/* Header Image (Regimark) */}
-          <div className="flex justify-center mb-4">
-            <img src="/assets/images/regimark_header.png" alt="Regimark Header" style={{ maxWidth: '100%', height: '120px', objectFit: 'contain' }} />
+          <div className="flex justify-center mb-6 pt-4">
+            <img 
+              src="/assets/images/regimark_header.png" 
+              alt="Regimark Header" 
+              style={{ 
+                maxWidth: '100%', 
+                height: '300px', /* Fixed height to match footer */
+                width: '100%', 
+                objectFit: 'fill', /* Changed to fill to stretch the image */
+                marginTop: '15px',
+                transform: 'scale(1.3)' /* Scale up the image by 30% */
+              }} 
+            />
           </div>
           {/* Company Header */}
           <div className="bg-blue-50 p-4 mb-6 border border-blue-200 rounded">
@@ -442,8 +453,19 @@ export const InvoiceModal = ({
           </div>
 
           {/* Footer Image (Regimark) */}
-          <div className="flex justify-center mt-4">
-            <img src="/assets/images/regimark_footer.png" alt="Regimark Footer" style={{ maxWidth: '100%', height: '100px', objectFit: 'contain' }} />
+          <div className="flex justify-center mt-12 pb-12 w-full">
+            <img 
+              src="/assets/images/regimark_footer.png" 
+              alt="Regimark Footer" 
+              style={{ 
+                maxWidth: '100%', 
+                height: '300px', /* Fixed height instead of auto to ensure stretching */
+                width: '100%', 
+                objectFit: 'fill', /* Changed to fill to stretch the image */
+                marginBottom: '30px',
+                transform: 'scale(1.3)', /* Scale up the image by 30% */
+              }} 
+            />
           </div>
 
           </form>

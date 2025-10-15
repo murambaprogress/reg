@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../components/UserContext';
 import Button from '../components/ui/Button';
-
+import { getBaseUrl } from '../utils/config';
 import Icon from '../components/AppIcon';
 
 
@@ -43,7 +43,8 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+  // Use the config helper for PythonAnywhere in production
+  const API_BASE = getBaseUrl();
 
   const handleLogin = async (e) => {
     e.preventDefault();

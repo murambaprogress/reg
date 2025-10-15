@@ -24,20 +24,24 @@ export const ImportDebtorsModal = ({
       console.log('Full response data:', JSON.stringify(data, null, 2));
       setImportResult(data);
       
-      // Treat any response with imported_count or success_count as success
+      // Treat any response with imported_count, success_count or count as success
       const imported = data.imported_count || data.success_count || data.count || 0;
-      console.log('Imported count:', imported, 'Error count:', data.error_count);
+      console.log('Imported count:', imported, 'Error count:', data.error_count || 0);
       
-      // Consider it successful if we have imports and no errors, OR if we have a success message
-      const isSuccessful = (imported > 0 && (!data.error_count || data.error_count === 0)) || 
-                          (data.message && data.message.includes('completed') && data.success_count > 0);
+      // Consider any import with a success_count, count, or transactions_processed as successful
+      const isSuccessful = (
+        (imported > 0) || 
+        (data.transactions_processed && data.transactions_processed > 0) ||
+        (data.message && data.message.includes('completed'))
+      );
       
       console.log('Import considered successful:', isSuccessful);
       console.log('About to call onSuccess callback with data:', data);
       
       if (isSuccessful) {
         console.log('Calling parent onSuccess callback...');
-        onSuccess(data); // Call immediately to refresh debtors list
+        // Force call to refresh debtors list
+        onSuccess(data);
         
         setTimeout(() => {
           console.log('Closing modal after timeout...');
@@ -66,9 +70,24 @@ export const ImportDebtorsModal = ({
         return;
       }
 
-      console.log('Handling file upload:', file.name, 'Type:', file.type);
+      console.log('Handling file upload:', file.name, 'Type:', file.type, 'Size:', file.size, 'bytes');
       setImportError(null);
       setImportResult(null);
+
+      // Validate file type
+      if (!(file.type === 'text/csv' || 
+            file.type === 'application/vnd.ms-excel' || 
+            file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            file.name.endsWith('.csv'))) {
+        setImportError('Please upload a CSV or Excel file (.csv, .xlsx, .xls)');
+        return;
+      }
+
+      // Validate file is not empty
+      if (file.size === 0) {
+        setImportError('The file is empty. Please upload a valid file.');
+        return;
+      }
 
       const formData = new FormData();
       formData.append('file', file);
@@ -76,7 +95,7 @@ export const ImportDebtorsModal = ({
       
       // Log FormData contents
       for (let [key, value] of formData.entries()) {
-        console.log('FormData entry:', key, value);
+        console.log('FormData entry:', key, value instanceof File ? `${value.name} (${value.type})` : value);
       }
 
       importMutation.mutate(formData);

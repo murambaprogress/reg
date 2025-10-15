@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { addStandardFooter } from '../../../utils/pdfUtils';
 import { useBilling } from '../BillingContext';
 import InvoiceModal from './InvoiceModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
@@ -120,6 +121,9 @@ const BillingTable = ({ searchTerm, dateRange }) => {
 
   const handleEditInvoice = async (invoice) => {
     try {
+      // Show loading indicator
+      setLoading(true);
+      
       // Fetch full invoice details for editing
       const fullInvoice = await getInvoice(invoice.id);
       setSelectedInvoice(fullInvoice);
@@ -127,6 +131,9 @@ const BillingTable = ({ searchTerm, dateRange }) => {
       setIsInvoiceModalOpen(true);
     } catch (error) {
       console.error('Error fetching invoice details:', error);
+      alert('Failed to load invoice details. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -389,7 +396,7 @@ const BillingTable = ({ searchTerm, dateRange }) => {
       doc.setFont('helvetica', 'normal');
       
       const footerY = pageHeight - 100;
-      const emailText = 'Email: rmakambe@gmail.com';
+      const emailText = 'Email: tinashe@regimarkauto.co.zw';
       const emailWidth = doc.getTextWidth(emailText);
       doc.text(emailText, (pageWidth - emailWidth) / 2, footerY);
       
@@ -596,7 +603,7 @@ const BillingTable = ({ searchTerm, dateRange }) => {
       doc.setFont('helvetica', 'normal');
       
       const footerY = pageHeight - 100;
-      const emailText = 'Email: rmakambe@gmail.com';
+      const emailText = 'Email: tinashe@regimarkauto.co.zw';
       const emailWidth = doc.getTextWidth(emailText);
       doc.text(emailText, (pageWidth - emailWidth) / 2, footerY);
       
@@ -847,7 +854,13 @@ const BillingTable = ({ searchTerm, dateRange }) => {
 
       <InvoiceModal
         isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
+        onClose={() => {
+          setIsInvoiceModalOpen(false);
+          // Reset selected invoice
+          setSelectedInvoice(null);
+          // Refresh the invoices list to ensure changes are reflected
+          fetchInvoices();
+        }}
         invoice={selectedInvoice}
         mode={modalMode}
       />

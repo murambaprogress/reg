@@ -15,6 +15,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .serializers import RegisterSerializer, LoginSerializer, OTPSerializer, UserSerializer
 import logging
+import json
+import platform
+import django
 
 User = get_user_model()
 
@@ -1653,5 +1656,46 @@ def departments_list(request):
         return Response(list(departments))
     except Exception as e:
         return Response({'message': 'Error fetching departments', 'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_check(request):
+    """
+    API health check endpoint.
+    This endpoint is used by monitoring scripts to verify that the API is running.
+    """
+    try:
+        # Basic system info
+        system_info = {
+            "hostname": platform.node(),
+            "platform": platform.platform(),
+            "python_version": platform.python_version(),
+            "django_version": django.__version__
+        }
+
+        # Check database connectivity
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            db_check = cursor.fetchone()[0] == 1
+
+        # Check if we can access models
+        department_count = Department.objects.count()
+        
+        return Response({
+            "status": "ok",
+            "timestamp": timezone.now().isoformat(),
+            "database": "connected" if db_check else "error",
+            "system_info": system_info,
+            "app_checks": {
+                "departments_available": department_count > 0
+            }
+        })
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e),
+            "timestamp": timezone.now().isoformat()
+        }, status=500)
 
 # inventory endpoints moved to the inventory app

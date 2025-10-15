@@ -1,12 +1,21 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Routes from "./Routes";
-import { UserProvider } from "./components/UserContext";
-import { SalesProvider } from "./pages/sales-shop/SalesContext";
-import { InventoryProvider } from "./pages/inventory-management/InventoryContext";
-
+import Notification from "./components/Notification";
+import "./utils/billingApiHelper"; // Import to initialize window.billingApi
 
 function App() {
-  return <Routes />;
+  // Initialize API notification handlers
+  useEffect(() => {
+    // Add any global initialization here if needed
+    console.log("App initialized");
+  }, []);
+  
+  return (
+    <>
+      <Routes />
+      <Notification />
+    </>
+  );
 }
 
 export default App;
