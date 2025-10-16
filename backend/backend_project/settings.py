@@ -92,7 +92,7 @@ DATABASES = {
     }
 }
 
-#local db
+# Local db (commented out)
 """
 DATABASES = {
     'default': {

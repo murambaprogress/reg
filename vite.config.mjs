@@ -5,7 +5,7 @@ import tagger from "@dhiwise/component-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Always use PythonAnywhere URL as requested
+  // Use PythonAnywhere backend server
   const apiTarget = 'https://progress.pythonanywhere.com';
     
   console.log(`Using API target: ${apiTarget} in ${mode} mode`);
