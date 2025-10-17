@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .serializers import RegisterSerializer, LoginSerializer, OTPSerializer, UserSerializer
@@ -313,7 +314,7 @@ def require_admin(fn):
     return wrapper
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([JWTAuthentication])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def create_technician(request):
     print(f"DEBUG: create_technician called by user: {request.user}")

@@ -47,6 +47,7 @@ MIDDLEWARE = [
 # Exempt API endpoints from CSRF validation
 CSRF_EXEMPT_URLS = [
     r'^/api/',
+    r'^/auth/',
 ]
 
 ROOT_URLCONF = 'backend_project.urls'
@@ -155,6 +156,10 @@ else:
         'http://progress.pythonanywhere.com',
     ]
     CORS_ALLOW_CREDENTIALS = True
+    CSRF_TRUSTED_ORIGINS = [
+        'https://progress.pythonanywhere.com',
+        'http://progress.pythonanywhere.com',
+    ]
 
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
@@ -162,6 +167,7 @@ CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

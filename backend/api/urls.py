@@ -6,7 +6,8 @@ urlpatterns = [
     path('register', views.register, name='register'),
     path('login', views.login, name='login'),
     path('verify-otp', views.verify_otp, name='verify_otp'),
-    path('create-technician', views.create_technician, name='create_technician'),
+    path('create-technician/', views.create_technician, name='create_technician'),
+    path('create-technician', views.create_technician),  # Keep old URL for compatibility
     path('me', views.me, name='me'),
     path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
     path('health-check/', views.health_check, name='health_check'),
