@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import { useUser } from '../../../components/UserContext';
+import api from '../../../utils/axios';
 
 const TechnicianManagement = ({ onStatsUpdate }) => {
   const { user } = useUser();
@@ -16,8 +17,6 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
     confirmPassword: ''
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
-
   useEffect(() => {
     fetchTechnicians();
   }, []);
@@ -25,23 +24,11 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
   const fetchTechnicians = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/technicians`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTechnicians(data);
-      } else {
-        setError('Failed to fetch technicians');
-      }
+      const response = await api.get('/auth/admin/technicians');
+      setTechnicians(response.data);
     } catch (error) {
       console.error('Error fetching technicians:', error);
-      setError('Network error occurred');
+      setError(error.response?.data?.message || 'Failed to fetch technicians');
     } finally {
       setLoading(false);
     }
@@ -62,37 +49,43 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/create-technician`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: newTechnician.username,
-          email: newTechnician.email,
-          password: newTechnician.password
-        })
+      // Use axios instance which automatically adds the token and CSRF header
+      const response = await api.post('/auth/create-technician/', {
+        username: newTechnician.username,
+        email: newTechnician.email,
+        password: newTechnician.password
       });
 
-      if (response.ok) {
-        setShowCreateModal(false);
-        setNewTechnician({
-          username: '',
-          email: '',
-          password: '',
-          confirmPassword: ''
-        });
-        fetchTechnicians();
-        onStatsUpdate();
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to create technician');
-      }
+      // Success case
+      setShowCreateModal(false);
+      setNewTechnician({
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+      });
+      fetchTechnicians();
+      onStatsUpdate();
+      
     } catch (error) {
       console.error('Error creating technician:', error);
-      setError('Network error occurred');
+      
+      // Enhanced error handling
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        if (error.response.status === 403 && error.response.data?.detail?.includes('CSRF')) {
+          setError('CSRF verification failed. Please refresh the page and try again.');
+        } else {
+          setError(error.response.data?.message || error.response.data?.detail || 'Failed to create technician');
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        setError('No response from server. Please check your connection and try again.');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        setError('Error creating request. Please try again.');
+      }
     }
   };
 
@@ -102,48 +95,25 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/technicians/${technicianId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        fetchTechnicians();
-        onStatsUpdate();
-      } else {
-        setError('Failed to delete technician');
-      }
+      await api.delete(`/auth/admin/technicians/${technicianId}`);
+      fetchTechnicians();
+      onStatsUpdate();
     } catch (error) {
       console.error('Error deleting technician:', error);
-      setError('Network error occurred');
+      setError(error.response?.data?.message || 'Failed to delete technician');
     }
   };
 
   const handleToggleActive = async (technicianId, isActive) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/technicians/${technicianId}/toggle-active`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_active: !isActive })
+      await api.patch(`/auth/admin/technicians/${technicianId}/toggle-active`, {
+        is_active: !isActive
       });
-
-      if (response.ok) {
-        fetchTechnicians();
-        onStatsUpdate();
-      } else {
-        setError('Failed to update technician status');
-      }
+      fetchTechnicians();
+      onStatsUpdate();
     } catch (error) {
       console.error('Error updating technician:', error);
-      setError('Network error occurred');
+      setError(error.response?.data?.message || 'Failed to update technician status');
     }
   };
 
