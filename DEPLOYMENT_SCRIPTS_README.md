@@ -85,10 +85,10 @@ This directory contains scripts and guides for deploying the Regimark Motors Con
 5. **Test the API**
    ```
    # On PythonAnywhere
-   ./test_api_health.sh https://progress.pythonanywhere.com/api
+   ./test_api_health.sh https://http://localhost:3001/api
    
    # On local machine
-   node test_api_health.js https://progress.pythonanywhere.com/api
+   node test_api_health.js https://http://localhost:3001/api
    ```
 
 ## Environment Variables

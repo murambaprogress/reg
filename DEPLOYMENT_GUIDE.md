@@ -50,7 +50,7 @@ DEBUG=False
 
 ### 5. Configure Web App
 1. Go to PythonAnywhere Dashboard > Web
-2. Create a new web app with domain: `progress.pythonanywhere.com`
+2. Create a new web app with domain: `http://localhost:3001`
 3. Choose "Manual configuration" with Python 3.10
 4. Set the source code directory to: `/home/Progress/regimark_motors_control_center/backend`
 5. Set the WSGI configuration file to: `/home/Progress/regimark_motors_control_center/backend/wsgi_config.py`
@@ -79,7 +79,7 @@ python manage.py createsuperuser
 ### 1. Update API Base URL
 The frontend `.env` file has been updated to point to:
 ```env
-VITE_API_BASE=https://progress.pythonanywhere.com/api/auth
+VITE_API_BASE=https://http://localhost:3001/api/auth
 ```
 
 ### 2. Build Frontend
@@ -120,7 +120,7 @@ Both accounts will require OTP verification sent to: murambaprogress@gmail.com
 ## Testing the Deployment
 
 ### 1. Backend API Test
-Visit: `https://progress.pythonanywhere.com/api/login`
+Visit: `https://http://localhost:3001/api/login`
 
 ### 2. Login Flow Test
 1. Try logging in with admin/supervisor credentials

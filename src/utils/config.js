@@ -2,9 +2,9 @@
  * Configuration settings for the application
  */
 
-// API Base URL - Always use progress.pythonanywhere.com
+// API Base URL - Use cloud backend
 export const getBaseUrl = () => {
-  // Always use progress.pythonanywhere.com as requested
+  // Always use cloud backend at progress.pythonanywhere.com
   return 'https://progress.pythonanywhere.com/api';
 };
 

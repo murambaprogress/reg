@@ -12,6 +12,7 @@ export const InvoiceModal = ({
   onSubmit,
 }) => {
   const { createInvoice } = useBilling();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     // Company details
     companyName: "SOLTAM STEEL SOLUTIONS",
@@ -185,12 +186,16 @@ export const InvoiceModal = ({
 
   const handleCreateInvoice = async () => {
     if (validateForm()) {
+      setLoading(true);
       try {
         await createInvoice(formData);
         alert('Invoice created successfully!');
         close();
       } catch (error) {
-        alert('Failed to create invoice.');
+        console.error('Invoice creation error:', error);
+        alert(`Invoice creation failed: ${error.message || 'Unknown error'}`);
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -330,8 +335,14 @@ export const InvoiceModal = ({
 
         {/* Form Actions - under Customer Billing */}
         <div className="flex justify-end mt-4 mb-6">
-          <Button onClick={handleCreateInvoice} type="button" variant="primary" style={{ fontWeight: 'bold', fontSize: '1rem' }}>
-            Save Invoice
+          <Button 
+            onClick={handleCreateInvoice} 
+            type="button" 
+            variant="primary" 
+            disabled={loading}
+            style={{ fontWeight: 'bold', fontSize: '1rem' }}
+          >
+            {loading ? 'Saving...' : 'Save Invoice'}
           </Button>
         </div>
         

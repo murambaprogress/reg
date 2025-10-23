@@ -1,3 +1,4 @@
+import useSessionErrorHandler from '../../../hooks/useSessionErrorHandler';
 import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
@@ -7,6 +8,7 @@ const PartsRequestApproval = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [processingId, setProcessingId] = useState(null);
+  const handleSessionError = useSessionErrorHandler();
 
   const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
@@ -30,10 +32,14 @@ const PartsRequestApproval = () => {
         const data = await response.json();
         setPartsRequests(data);
       } else {
+        // Try to parse error for session
+        const errorObj = { message: response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'UNKNOWN' };
+        if (handleSessionError(errorObj, setError)) return;
         setError('Failed to fetch parts requests');
       }
     } catch (error) {
       console.error('Error fetching parts requests:', error);
+      if (handleSessionError(error, setError)) return;
       setError('Network error occurred');
     } finally {
       setLoading(false);

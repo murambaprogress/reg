@@ -33,22 +33,38 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'api.middleware.CSRFExemptMiddleware',
+    'api.middleware.CSRFExemptMiddleware',  # Exempt API routes from CSRF
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Exempt API endpoints from CSRF validation
+# CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'https://progress.pythonanywhere.com',
+    
+]
+
+# Exempt API endpoints from CSRF validation (JWT authenticated)
 CSRF_EXEMPT_URLS = [
     r'^/api/',
-    r'^/auth/',
+    r'^/suppliers/',
+    r'^/customers/',
+    r'^/inventory/',
+    r'^/jobs/',
+    r'^/sales/',
+    r'^/billing/',
 ]
+
+# Additional CSRF settings
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
+CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 
 ROOT_URLCONF = 'backend_project.urls'
 
@@ -56,7 +72,7 @@ ROOT_URLCONF = 'backend_project.urls'
 FRONTEND_DIR = os.path.join(BASE_DIR, 'static', 'frontend')
 BUILD_DIR = os.path.join(BASE_DIR.parent, 'build')  # Root build directory for frontend
 
-# In production, serve frontend from Progress.pythonanywhere.com
+# In production, serve frontend from progress.pythonanywhere.com
 FRONTEND_PROD_URL = 'https://progress.pythonanywhere.com'
 
 TEMPLATES = [
@@ -94,7 +110,7 @@ DATABASES = {
 }
 
 # Local db (commented out)
-"""
+'''
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -105,7 +121,7 @@ DATABASES = {
         'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
-"""
+'''
 
 AUTH_USER_MODEL = 'api.User'
 
@@ -120,14 +136,14 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Frontend static files (built React app)
+# STATICFILES_DIRS must be before STATIC_URL reference
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),           # Primary: backend/static
     os.path.join(BASE_DIR.parent, 'build', 'assets'),  # Build directory assets
     BUILD_DIR                                   # Fallback: build directory
 ]
 
-# In production, set STATIC_URL to Progress.pythonanywhere.com
+# In production, set STATIC_URL to https://progress.pythonanywhere.com
 if not DEBUG:
     STATIC_URL = FRONTEND_PROD_URL + '/static/'
 
@@ -137,37 +153,21 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS - Allow all origins in development for easier testing
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOW_CREDENTIALS = True
-    CORS_ALLOW_ALL_HEADERS = True
-    CORS_ALLOW_ALL_METHODS = True
-    # Disable CSRF for development
-    CSRF_TRUSTED_ORIGINS = [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001',
-    ]
-else:
-    CORS_ALLOWED_ORIGINS = [
-        'https://progress.pythonanywhere.com',
-        'http://progress.pythonanywhere.com',
-    ]
-    CORS_ALLOW_CREDENTIALS = True
-    CSRF_TRUSTED_ORIGINS = [
-        'https://progress.pythonanywhere.com',
-        'http://progress.pythonanywhere.com',
-    ]
+# CORS settings
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'https://progress.pythonanywhere.com',
+    
+]
+CORS_ALLOW_CREDENTIALS = True
 
+# Headers to expose to the browser
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 # REST Framework and JWT settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -189,18 +189,6 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'VERIFYING_KEY': None,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-}
-
-from datetime import timedelta
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
@@ -231,11 +219,6 @@ ENABLE_2FA = os.environ.get('ENABLE_2FA', '1') == '1'
 if ENABLE_2FA:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# JWT settings
-JWT_SECRET = os.environ.get('JWT_SECRET', 'change-this-secret')
-JWT_ALGORITHM = 'HS256'
-JWT_EXP_DELTA_SECONDS = 86400
-
 # Supervisor hardcoded credentials
 SUPERVISOR_EMAIL = os.environ.get('SUPERVISOR_EMAIL', 'murambaprogress@gmail.com')
 SUPERVISOR_USERNAME = os.environ.get('SUPERVISOR_USERNAME', 'supervisor')
@@ -244,3 +227,10 @@ SUPERVISOR_PASSWORD = os.environ.get('SUPERVISOR_PASSWORD', 'supervisor123')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'murambaprogress@gmail.com')
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
+# Cookie settings for cross-origin CSRF
+if DEBUG:
+    CSRF_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SECURE = False  # Must be False for HTTP
+    SESSION_COOKIE_SECURE = False # Must be False for HTTP

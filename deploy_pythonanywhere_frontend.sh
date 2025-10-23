@@ -16,7 +16,7 @@ npm run build
 # 3. Create or update .env.production file
 echo "Setting up environment variables for production..."
 cat > .env.production << EOL
-VITE_API_BASE=https://progress.pythonanywhere.com
+VITE_API_BASE=https://http://localhost:3001
 EOL
 
 # 4. Create a deployment zip file

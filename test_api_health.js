@@ -7,7 +7,7 @@ const apiUrl = process.argv[2];
 
 if (!apiUrl) {
   console.error('Usage: node test_api_health.js <api-base-url>');
-  console.error('Example: node test_api_health.js https://progress.pythonanywhere.com/api');
+  console.error('Example: node test_api_health.js https://http://localhost:3001/api');
   process.exit(1);
 }
 

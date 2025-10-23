@@ -16,10 +16,7 @@ const PartsRequest = ({ jobId, onRequestParts }) => {
 
   const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-  useEffect(() => {
-    fetchAvailableParts();
-    // keep selectedJobId in sync if parent prop changes
-  }, []);
+  // Remove auto-fetch on mount. Only fetchAvailableParts on user action.
 
   useEffect(() => {
     if (jobId && Number(jobId) !== selectedJobId) setSelectedJobId(Number(jobId));

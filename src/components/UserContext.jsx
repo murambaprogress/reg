@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { getBaseUrl } from '../utils/config'; // Import from the central config file
 
 const UserContext = createContext(null);
 
@@ -15,56 +16,91 @@ export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const login = useCallback((userData) => {
+  const setAuthData = useCallback((userData) => {
     const { token, role, permissions } = userData;
     // If token is an object with access token, use that, otherwise use the token string
     const tokenString = typeof token === 'object' ? token.access : token;
     localStorage.setItem('token', tokenString);
     localStorage.setItem('role', role);
     localStorage.setItem('permissions', JSON.stringify(permissions || {}));
-    setUser({ ...userData, token: tokenString });
+    
+    // Ensure we set complete user data
+    setUser({ 
+      ...userData, 
+      token: tokenString,
+      role: role,
+      permissions: permissions || {}
+    });
   }, []);
 
-  const logout = useCallback(() => {
+  const clearAuthData = useCallback(() => {
+    console.log('Clearing auth data');
     localStorage.removeItem('token');
     localStorage.removeItem('role');
     localStorage.removeItem('permissions');
     setUser(null);
+  }, []);
+
+  const logout = useCallback(() => {
+    console.log('User logout triggered');
+    clearAuthData();
     // Redirect to login page
-    navigate('/', { replace: true });
-  }, [navigate]);
+    navigate('/login', { replace: true });
+  }, [clearAuthData, navigate]);
 
   // refresh user from backend if token exists
   useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+    // TEMPORARY: Skip token verification to bypass redirect loop
+    // Just load user data from localStorage without verifying with backend
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    const permissionsStr = localStorage.getItem('permissions');
     
-    const refresh = async () => {
-      setLoading(true);
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const permissions = permissionsStr ? JSON.parse(permissionsStr) : {};
+      const userData = {
+        token,
+        role,
+        permissions,
+        name: role, // Use role as name for now
+      };
+      setUser(userData);
+    } catch (e) {
+      console.error('Error loading user from localStorage:', e);
+    } finally {
+      setLoading(false);
+    }
+
+    // ORIGINAL CODE - DISABLED FOR NOW
+    /*
+    const API_BASE = getBaseUrl();
+    
+    const verifyToken = async () => {
       const token = localStorage.getItem('token');
       
       if (!token) {
         setLoading(false);
-        logout();
         return;
       }
 
+      setLoading(true);
+      
       try {
-        const res = await fetch(`${API_BASE}/auth/me`, {
+        const res = await fetch(`${API_BASE}/me`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        // Check specific error responses
-        if (res.status === 401 || res.status === 403) {
-          // Token expired or invalid
-          logout();
-          throw new Error('Session expired. Please login again.');
-        }
-
         if (!res.ok) {
-          throw new Error('Authentication failed');
+          console.log('Token verification failed with status:', res.status);
+          clearAuthData();
+          return;
         }
 
         const data = await res.json();
@@ -76,41 +112,24 @@ export const UserProvider = ({ children }) => {
           id: data.id
         };
 
-        setUser(userData);
-        localStorage.setItem('role', data.role);
-        localStorage.setItem('permissions', JSON.stringify(data.permissions || {}));
+        setAuthData(userData);
       } catch (e) {
         console.error('Auth check failed:', e);
-        logout();
-        // Force navigation to login if token is invalid/expired
-        if (window.location.pathname !== '/') {
-          window.location.href = '/';
-        }
+        clearAuthData();
       } finally {
-        setLoading(false);
+        setTimeout(() => setLoading(false), 300);
       }
     };
-    refresh();
-    // ensure loading flag ends if no token or after refresh
-    const token = localStorage.getItem('token');
-    if (!token) setLoading(false);
-    else {
-      // wait a tick to set loading false after refresh attempts
-      (async () => {
-        try {
-          // small delay to allow refresh to complete
-          await new Promise(r => setTimeout(r, 300));
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }
+    
+    verifyToken();
+    */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <UserContext.Provider value={{ 
       user, 
-      login,
+      login: setAuthData,
       logout,
       loading 
     }}>

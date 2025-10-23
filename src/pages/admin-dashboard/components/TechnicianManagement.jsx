@@ -1,14 +1,16 @@
+import useSessionErrorHandler from '../../../hooks/useSessionErrorHandler';
 import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import { useUser } from '../../../components/UserContext';
-import api from '../../../utils/axios';
+import api, { apiHelpers } from '../../../utils/axios';
+import auth from '../../../utils/auth';
+import { useApi } from '../../../utils/useApi';
+import { endpoints } from '../../../utils/urls';
 
 const TechnicianManagement = ({ onStatsUpdate }) => {
   const { user } = useUser();
   const [technicians, setTechnicians] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTechnician, setNewTechnician] = useState({
     username: '',
@@ -16,105 +18,97 @@ const TechnicianManagement = ({ onStatsUpdate }) => {
     password: '',
     confirmPassword: ''
   });
+  
+  // Use our custom API hook for simplified API calls with error handling
+  const { apiCall, loading, error, clearError } = useApi();
+
+  const handleSessionError = useSessionErrorHandler();
 
   useEffect(() => {
     fetchTechnicians();
   }, []);
 
-  const fetchTechnicians = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/auth/admin/technicians');
-      setTechnicians(response.data);
-    } catch (error) {
-      console.error('Error fetching technicians:', error);
-      setError(error.response?.data?.message || 'Failed to fetch technicians');
-    } finally {
-      setLoading(false);
-    }
+  const fetchTechnicians = () => {
+    apiCall(
+      () => apiHelpers.getTechnicians(),
+      (response) => setTechnicians(response.data),
+      {
+        errorMessage: 'Failed to fetch technicians',
+        onError: (error) => {
+          handleSessionError(error);
+        }
+      }
+    );
   };
 
   const handleCreateTechnician = async (e) => {
     e.preventDefault();
-    setError('');
+    clearError();
 
+    // Validate form
     if (newTechnician.password !== newTechnician.confirmPassword) {
-      setError('Passwords do not match');
-      return;
+      return apiCall(
+        () => Promise.reject(new Error('Passwords do not match')),
+        null,
+        { errorMessage: 'Passwords do not match' }
+      );
     }
 
     if (newTechnician.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
+      return apiCall(
+        () => Promise.reject(new Error('Password must be at least 6 characters')),
+        null,
+        { errorMessage: 'Password must be at least 6 characters' }
+      );
     }
-
-    try {
-      // Use axios instance which automatically adds the token and CSRF header
-      const response = await api.post('/auth/create-technician/', {
+    
+    // Make the API call using our custom hook and apiHelper
+    apiCall(
+      () => apiHelpers.createTechnician({
         username: newTechnician.username,
         email: newTechnician.email,
         password: newTechnician.password
-      });
-
-      // Success case
-      setShowCreateModal(false);
-      setNewTechnician({
-        username: '',
-        email: '',
-        password: '',
-        confirmPassword: ''
-      });
-      fetchTechnicians();
-      onStatsUpdate();
-      
-    } catch (error) {
-      console.error('Error creating technician:', error);
-      
-      // Enhanced error handling
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        if (error.response.status === 403 && error.response.data?.detail?.includes('CSRF')) {
-          setError('CSRF verification failed. Please refresh the page and try again.');
-        } else {
-          setError(error.response.data?.message || error.response.data?.detail || 'Failed to create technician');
-        }
-      } else if (error.request) {
-        // The request was made but no response was received
-        setError('No response from server. Please check your connection and try again.');
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        setError('Error creating request. Please try again.');
-      }
-    }
+      }),
+      (response) => {
+        // Success case
+        setShowCreateModal(false);
+        setNewTechnician({
+          username: '',
+          email: '',
+          password: '',
+          confirmPassword: ''
+        });
+        fetchTechnicians();
+        onStatsUpdate();
+      },
+      { errorMessage: 'Failed to create technician' }
+    );
   };
 
-  const handleDeleteTechnician = async (technicianId) => {
+  const handleDeleteTechnician = (technicianId) => {
     if (!confirm('Are you sure you want to delete this technician?')) {
       return;
     }
 
-    try {
-      await api.delete(`/auth/admin/technicians/${technicianId}`);
-      fetchTechnicians();
-      onStatsUpdate();
-    } catch (error) {
-      console.error('Error deleting technician:', error);
-      setError(error.response?.data?.message || 'Failed to delete technician');
-    }
+    apiCall(
+      () => apiHelpers.deleteTechnician(technicianId), // Use the helper function
+      () => {
+        fetchTechnicians();
+        onStatsUpdate();
+      },
+      { errorMessage: 'Failed to delete technician' }
+    );
   };
 
-  const handleToggleActive = async (technicianId, isActive) => {
-    try {
-      await api.patch(`/auth/admin/technicians/${technicianId}/toggle-active`, {
-        is_active: !isActive
-      });
-      fetchTechnicians();
-      onStatsUpdate();
-    } catch (error) {
-      console.error('Error updating technician:', error);
-      setError(error.response?.data?.message || 'Failed to update technician status');
-    }
+  const handleToggleActive = (technicianId, isActive) => {
+    apiCall(
+      () => apiHelpers.toggleTechnicianActive(technicianId, !isActive), // Use the helper function
+      () => {
+        fetchTechnicians();
+        onStatsUpdate();
+      },
+      { errorMessage: 'Failed to update technician status' }
+    );
   };
 
   return (

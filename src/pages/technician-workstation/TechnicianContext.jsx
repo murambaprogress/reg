@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getBaseUrl } from '../../utils/config';
+import api, { apiHelpers } from '../../utils/axios';
+import { endpoints } from '../../utils/urls';
 
 const TechnicianContext = createContext();
 
@@ -65,28 +67,20 @@ export const TechnicianProvider = ({ children }) => {
       setNotifications(prev => prev.filter(n => n.id !== notification.id));
     }, 5000);
   };
+  
+  // Load technician jobs on component mount
+  useEffect(() => {
+    fetchTechnicianJobs();
+  }, []);
 
   // Fetch technician's assigned jobs
   const fetchTechnicianJobs = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/jobs/technician-dashboard/`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        // Try to capture any HTML error message
-        let errorDetail = '';
-        try {
-          const text = await response.text();
-          errorDetail = text.slice(0, 120).replace(/\s+/g, ' ');
-        } catch { /* ignore */ }
-        throw new Error(`Failed to fetch jobs (${response.status}): ${response.statusText} ${errorDetail}`.trim());
-      }
-
-      const data = await safeParseJSON(response);
+      // Use centralized axios instance for proper auth handling
+      const response = await apiHelpers.getTechnicianJobs();
+      const data = response.data;
       
       // Transform backend data to match frontend expectations
       const transformedJobs = data.map(job => ({
@@ -167,25 +161,13 @@ export const TechnicianProvider = ({ children }) => {
     try {
       const backendStatus = transformStatusToBackend(newStatus);
       
-      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/status/`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ 
-          status: backendStatus, 
-          notes 
-        }),
+      // Use centralized axios instance for proper auth handling
+      const response = await api.post(`/jobs/${jobId}/status/`, { 
+        status: backendStatus, 
+        notes 
       });
 
-      if (!response.ok) {
-        try {
-          const errorData = await safeParseJSON(response);
-          throw new Error(errorData.message || `Failed to update job status: ${response.statusText}`);
-        } catch (e) {
-          throw new Error(e.message || `Failed to update job status: ${response.statusText}`);
-        }
-      }
-
-      const updatedJob = await safeParseJSON(response);
+      const updatedJob = response.data;
       
       // Transform the updated job
       const transformedJob = {
@@ -458,18 +440,10 @@ export const TechnicianProvider = ({ children }) => {
     }
   };
 
-  // Initialize data on mount and set up periodic refresh
+  // Initialize data on mount - no auto-refresh
   useEffect(() => {
     fetchTechnicianJobs();
-    
-    // Set up periodic refresh every 30 seconds instead of frequent polling
-    const refreshInterval = setInterval(() => {
-      fetchTechnicianJobs();
-    }, 30000); // 30 seconds
-    
-    return () => {
-      clearInterval(refreshInterval);
-    };
+    // No auto-refresh - only load on component mount or manual refresh
   }, []);
 
   const value = {

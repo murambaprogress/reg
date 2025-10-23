@@ -14,7 +14,7 @@ call npm run build
 
 REM 3. Create or update .env.production file
 echo Setting up environment variables for production...
-echo VITE_API_BASE=https://progress.pythonanywhere.com > .env.production
+echo VITE_API_BASE=https://http://localhost:3001 > .env.production
 
 REM 4. Create a deployment zip file (requires 7-Zip or similar)
 echo Creating deployment archive...

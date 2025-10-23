@@ -6,7 +6,7 @@ echo "Testing API health check endpoint..."
 # Make sure the script is run with a URL parameter
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <api-base-url>"
-    echo "Example: $0 https://progress.pythonanywhere.com/api"
+    echo "Example: $0 https://http://localhost:3001/api"
     exit 1
 fi
 

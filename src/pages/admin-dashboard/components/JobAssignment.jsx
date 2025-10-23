@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import useSessionErrorHandler from '../../../hooks/useSessionErrorHandler';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { apiGet, apiPatch, getBaseUrl } from '../../../utils/api';
 
 const JobAssignment = ({ onStatsUpdate }) => {
   const [jobs, setJobs] = useState([]);
@@ -10,8 +12,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedTechnician, setSelectedTechnician] = useState('');
-
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api';
+  const handleSessionError = useSessionErrorHandler();
 
   useEffect(() => {
     fetchJobs();
@@ -19,25 +20,20 @@ const JobAssignment = ({ onStatsUpdate }) => {
   }, []);
 
   const fetchJobs = async () => {
-    setLoading(true);
+    // Only show loading if we don't have data yet
+    if (jobs.length === 0) {
+      setLoading(true);
+    }
+    setError('');
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/jobs/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setJobs(data);
-      } else {
-        setError('Failed to fetch jobs');
-      }
+      const data = await apiGet('/jobs/');
+      setJobs(data);
     } catch (error) {
       console.error('Error fetching jobs:', error);
-      setError('Network error occurred');
+      if (handleSessionError(error, setError)) {
+        return;
+      }
+      setError('Failed to load jobs. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -45,6 +41,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
 
   const fetchTechnicians = async () => {
     try {
+      const API_BASE = getBaseUrl();
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/jobs/technicians/`, {
         headers: {
@@ -69,6 +66,7 @@ const JobAssignment = ({ onStatsUpdate }) => {
     }
 
     try {
+      const API_BASE = getBaseUrl();
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/jobs/${selectedJob.id}/assign/`, {
         method: 'PATCH',
@@ -102,7 +100,10 @@ const JobAssignment = ({ onStatsUpdate }) => {
       return;
     }
 
+    setError(''); // Clear any previous errors
+    
     try {
+      const API_BASE = getBaseUrl();
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/jobs/${jobId}/unassign/`, {
         method: 'PATCH',
@@ -113,14 +114,20 @@ const JobAssignment = ({ onStatsUpdate }) => {
       });
 
       if (response.ok) {
-        fetchJobs();
-        onStatsUpdate();
+        await fetchJobs(); // Wait for jobs to refresh
+        if (onStatsUpdate && typeof onStatsUpdate === 'function') {
+          onStatsUpdate(); // Safely call stats update
+        }
       } else {
-        setError('Failed to unassign job');
+        const data = await response.json().catch(() => ({}));
+        setError(data.message || 'Failed to unassign job');
       }
     } catch (error) {
       console.error('Error unassigning job:', error);
-      setError('Network error occurred');
+      setError('Network error occurred while unassigning job');
+      if (handleSessionError(error, setError)) {
+        return;
+      }
     }
   };
 

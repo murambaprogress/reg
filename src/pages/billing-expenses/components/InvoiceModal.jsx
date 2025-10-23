@@ -7,13 +7,14 @@ import { getAllCustomers, searchCustomers } from "../../../api/customers";
 import { validateInvoice, formatInvoiceData, showNotification } from "../../../utils/billingApiHelper";
 
 const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
-  const { createInvoice, updateInvoice, fetchInvoices, loading } = useBilling();
+  const { createInvoice, updateInvoice, fetchInvoices, loading: contextLoading } = useBilling();
   
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [customerError, setCustomerError] = useState(null);
+  const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     // Invoice details

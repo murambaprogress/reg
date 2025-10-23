@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes as RouterRoutes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes as RouterRoutes, Route, Navigate, useLocation } from "react-router-dom";
 import ScrollToTop from "components/ScrollToTop";
 import ErrorBoundary from "components/ErrorBoundary";
 import ThemeProvider from "components/ui/ThemeProvider";
@@ -27,23 +27,17 @@ import SupplierManagement from "pages/supplier-management";
 import SalesShop from "pages/sales-shop";
 import AdminDashboard from "pages/admin-dashboard";
 
-// Route guard for login/public pages
-const PublicRoute = ({ element }) => {
+// Route guard for login/public pages. Redirects if user is already logged in.
+const GuestRoute = ({ element }) => {
   const { user, loading } = useUser();
-  const location = useLocation();
 
   if (loading) {
     return <div>Loading...</div>;
   }
 
-  // If user is authenticated, redirect based on role
   if (user?.token) {
-    let redirectPath;
-    if (user.role === 'technician') {
-      redirectPath = "/technician-workstation";
-    } else {
-      redirectPath = location.state?.from || "/admin-dashboard";
-    }
+    // If user is authenticated, redirect them away from the login page
+    const redirectPath = user.role === 'technician' ? "/technician-workstation" : "/admin-dashboard";
     return <Navigate to={redirectPath} replace />;
   }
 
@@ -60,37 +54,42 @@ const ProtectedRoute = ({ element, allowedRoles }) => {
   }
 
   if (!user?.token) {
-    // Save the attempted URL and redirect to login
-    return <Navigate to="/" replace state={{ from: location.pathname }} />;
+    // User not logged in, redirect to login page
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  // Check if user has the required role
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    // User is logged in but does not have the required role
     return <NotFound />;
   }
 
   return element;
 };
 
-const AuthRedirect = ({ element }) => {
+// A component to handle the root path and redirect appropriately
+const RootRedirect = () => {
   const { user, loading } = useUser();
   const location = useLocation();
 
+  // TEMPORARY: Always go to login for now
+  console.log('RootRedirect - user:', user, 'loading:', loading);
+  return <Navigate to="/login" replace />;
+
+  /* ORIGINAL CODE - DISABLED FOR DEBUGGING
   if (loading) {
     return <div>Loading...</div>;
   }
 
   if (user?.token) {
-    // If user is logged in, redirect based on role
-    let redirectPath;
-    if (user.role === 'technician') {
-      redirectPath = "/technician-workstation";
-    } else {
-      redirectPath = location.state?.from || "/admin-dashboard";
-    }
-    return <Navigate to={redirectPath} replace />;
+    // If user is logged in, redirect based on role or previous location
+    const from = location.state?.from?.pathname || (user.role === 'technician' ? "/technician-workstation" : "/admin-dashboard");
+    return <Navigate to={from} replace />;
   }
 
-  return element;
+  // If not logged in, go to the login page
+  return <Navigate to="/login" replace />;
+  */
 };
 
 
@@ -106,9 +105,13 @@ const Routes = () => {
                   <SalesProvider>
                     <ScrollToTop />
                     <RouterRoutes>
-                      {/* Root path shows login for unauthenticated users */}
-                      <Route path="/" element={<AuthRedirect element={<Login />} />} />
-                      <Route path="/login" element={<Navigate to="/" replace />} />
+                      {/* Root path redirects based on auth status */}
+                      <Route path="/" element={<RootRedirect />} />
+
+                      {/* Login page is only for guests */}
+                      <Route path="/login" element={<GuestRoute element={<Login />} />} />
+
+                      {/* Protected Routes */}
                       <Route path="/dashboard-overview" element={<ProtectedRoute element={<BillingProvider><DashboardOverview /></BillingProvider>} allowedRoles={["admin","supervisor"]} />} />
                       <Route path="/inventory-management" element={<ProtectedRoute element={<InventoryManagement />} allowedRoles={["admin","supervisor"]} />} />
                       <Route path="/reports-analytics" element={<ProtectedRoute element={<ReportsAnalytics />} allowedRoles={["admin","supervisor"]} />} />
@@ -120,6 +123,8 @@ const Routes = () => {
                       <Route path="/supplier-management" element={<ProtectedRoute element={<SupplierManagement />} allowedRoles={["admin","supervisor"]} />} />
                       <Route path="/sales-shop" element={<ProtectedRoute element={<SalesShop />} allowedRoles={["admin","supervisor"]} />} />
                       <Route path="/admin-dashboard" element={<ProtectedRoute element={<AdminDashboard />} allowedRoles={["admin","supervisor"]} />} />
+                      
+                      {/* Not Found Route */}
                       <Route path="*" element={<NotFound />} />
                     </RouterRoutes>
                     <Footer />

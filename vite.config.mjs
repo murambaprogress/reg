@@ -5,7 +5,7 @@ import tagger from "@dhiwise/component-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Use PythonAnywhere backend server
+  // Always use cloud backend at progress.pythonanywhere.com
   const apiTarget = 'https://progress.pythonanywhere.com';
     
   console.log(`Using API target: ${apiTarget} in ${mode} mode`);
@@ -25,7 +25,19 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiTarget,
           changeOrigin: true,
-          secure: mode === 'production',
+          secure: mode !== 'development', // Only use secure for production
+          timeout: 30000, // 30 seconds timeout
+          // Don't rewrite /api prefix - keep it intact so it reaches /api/ routes on backend
+          configure: (proxy, options) => {
+            proxy.on('error', (err, req, res) => {
+              console.log('Proxy error:', err.message);
+            });
+          }
+        },
+        '/auth': {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: mode !== 'development',
         }
       }
     },

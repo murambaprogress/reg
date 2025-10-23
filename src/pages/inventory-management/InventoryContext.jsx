@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useToast as useGlobalToast } from '../../components/ui/Toast';
 import { getBaseUrl } from '../../utils/config';
+import api, { apiHelpers } from '../../utils/axios';
+import { useApi } from '../../utils/useApi';
+import { endpoints } from '../../utils/urls';
+import { useUser } from '../../components/UserContext';
 
 // Constants
 const API_BASE = getBaseUrl();
@@ -126,6 +130,9 @@ const useApiCall = (showToast) => {
 };
 
 export const InventoryProvider = ({ children }) => {
+  // Authentication
+  const { user, loading: authLoading } = useUser();
+  
   // State
   const [parts, setParts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -147,16 +154,19 @@ export const InventoryProvider = ({ children }) => {
 
   const apiCall = useApiCall(showToast);
 
-  // Fetch suppliers
+  // Fetch suppliers with proper authentication
   const fetchSuppliers = useCallback(async () => {
     try {
-      const data = await apiCall(`${API_BASE}/suppliers/`);
-      setSuppliers(Array.isArray(data) ? data : []);
+      const response = await api.get(endpoints.inventorySuppliers);
+      setSuppliers(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.warn('Failed to fetch suppliers:', error);
       setSuppliers([]);
+      if (showToast) {
+        showToast('Failed to load suppliers', 'error');
+      }
     }
-  }, [apiCall]);
+  }, [showToast]);
 
   // Get user role from localStorage
   useEffect(() => {
@@ -179,20 +189,32 @@ export const InventoryProvider = ({ children }) => {
     setError(null);
 
     try {
-      // Fetch parts with fallback URL handling
+      // Fetch parts using centralized axios instance
       const fetchParts = async () => {
         try {
-          return await apiCall(`${API_BASE}/inventory/parts/`);
+          const response = await api.get(endpoints.inventoryParts);
+          return response.data;
         } catch (error) {
-          // Fallback to URL without trailing slash
-          return await apiCall(`${API_BASE}/inventory/parts`);
+          console.warn('Failed to fetch parts using centralized API:', error);
+          throw error;
         }
       };
 
+      // Fetch categories using centralized axios instance
+      const fetchCategories = async () => {
+        try {
+          const response = await api.get(endpoints.inventoryCategories);
+          return response.data;
+        } catch (error) {
+          console.warn('Failed to fetch categories using centralized API:', error);
+          throw error;
+        }
+      };
+      
       const [partsData, categoriesData, suppliersData] = await Promise.allSettled([
         fetchParts(),
-        apiCall(`${API_BASE}/inventory/categories/`),
-        apiCall(`${API_BASE}/suppliers/`)
+        fetchCategories(),
+        api.get(endpoints.inventorySuppliers).then(response => response.data)
       ]);
 
       // Handle parts data
@@ -232,16 +254,21 @@ export const InventoryProvider = ({ children }) => {
     }
   }, [apiCall]);
 
-  // Fetch transactions
+  // Fetch transactions using our centralized axios instance
   const fetchTransactions = useCallback(async () => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/transactions/`);
-      setRecentTransactions(Array.isArray(data) ? data : []);
+      // Use the helper to ensure proper authentication and error handling
+      const response = await apiHelpers.getInventoryTransactions();
+      setRecentTransactions(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.warn('Failed to fetch transactions:', error);
       setRecentTransactions([]);
+      // Show toast if available
+      if (showToast) {
+        showToast('Failed to load inventory transactions', 'error');
+      }
     }
-  }, [apiCall]);
+  }, [showToast]);
 
   // Calculate low stock alerts
   const calculateLowStockAlerts = useCallback(() => {
@@ -294,12 +321,18 @@ export const InventoryProvider = ({ children }) => {
 
   // Effects
   useEffect(() => {
-    fetchInventoryData();
-  }, [fetchInventoryData]);
+    // Only fetch inventory data if user is authenticated and not loading
+    if (user && !authLoading) {
+      fetchInventoryData();
+    }
+  }, [fetchInventoryData, user, authLoading]);
 
   useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+    // Only fetch transactions if user is authenticated and not loading
+    if (user && !authLoading) {
+      fetchTransactions();
+    }
+  }, [fetchTransactions, user, authLoading]);
 
   useEffect(() => {
     calculateLowStockAlerts();
@@ -336,25 +369,23 @@ export const InventoryProvider = ({ children }) => {
   // API operations
   const refreshParts = useCallback(async () => {
     try {
-      const data = await apiCall(`${API_BASE}/inventory/parts/`);
-      if (Array.isArray(data)) {
-        const normalizedParts = data.map(normalizePartData);
+      const response = await apiHelpers.getInventoryParts();
+      if (Array.isArray(response.data)) {
+        const normalizedParts = response.data.map(normalizePartData);
         setParts(normalizedParts);
       }
-      return data;
+      return response.data;
     } catch (error) {
       console.error('Failed to refresh parts:', error);
       throw error;
     }
-  }, [apiCall]);
+  }, []);
 
   const searchParts = useCallback(async (query) => {
     try {
-      const url = query 
-        ? `${API_BASE}/inventory/parts/?search=${encodeURIComponent(query)}`
-        : `${API_BASE}/inventory/parts/`;
-      
-      const data = await apiCall(url);
+      // Use our centralized apiHelpers for search
+      const response = await apiHelpers.searchInventoryParts(query);
+      const data = response.data;
       
       if (Array.isArray(data)) {
         const normalizedParts = data.map(normalizePartData);
@@ -366,7 +397,7 @@ export const InventoryProvider = ({ children }) => {
       console.error('Search failed:', error);
       return [];
     }
-  }, [apiCall]);
+  }, []);
 
   const createPart = useCallback(async (payload) => {
     try {
@@ -380,10 +411,9 @@ export const InventoryProvider = ({ children }) => {
         throw new Error(errorMessage);
       }
 
-      const data = await apiCall(`${API_BASE}/inventory/parts/`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
+      // Use centralized axios instance
+      const response = await api.post(endpoints.inventoryParts, payload);
+      const data = response.data;
 
       await refreshParts();
       
@@ -399,7 +429,7 @@ export const InventoryProvider = ({ children }) => {
       }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast, userRole]);
+  }, [refreshParts, showToast, userRole]);
 
   const updatePart = useCallback(async (id, payload) => {
     try {
@@ -413,11 +443,9 @@ export const InventoryProvider = ({ children }) => {
         throw new Error(errorMessage);
       }
 
-      // Make sure the URL ends with a trailing slash to avoid Django APPEND_SLASH issues
-      const data = await apiCall(`${API_BASE}/inventory/parts/${id}/`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload)
-      });
+      // Use centralized axios instance
+      const response = await api.patch(`${endpoints.inventoryParts}/${id}/`, payload);
+      const data = response.data;
 
       await refreshParts();
       
@@ -433,7 +461,7 @@ export const InventoryProvider = ({ children }) => {
       }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast, userRole]);
+  }, [refreshParts, showToast, userRole]);
 
   const assignPart = useCallback(async ({ partId, jobId, quantity, notes }) => {
     try {
@@ -447,10 +475,11 @@ export const InventoryProvider = ({ children }) => {
         throw new Error(errorMessage);
       }
 
-      const data = await apiCall(`${API_BASE}/inventory/assign-to-job/`, {
-        method: 'POST',
-        body: JSON.stringify({ partId, jobId, quantity, notes })
+      // Use centralized axios instance
+      const response = await api.post(`/inventory/assign-to-job/`, { 
+        partId, jobId, quantity, notes 
       });
+      const data = response.data;
 
       await Promise.all([refreshParts(), fetchTransactions()]);
       
@@ -466,7 +495,7 @@ export const InventoryProvider = ({ children }) => {
       }
       throw error;
     }
-  }, [apiCall, refreshParts, fetchTransactions, showToast, userRole]);
+  }, [refreshParts, fetchTransactions, showToast, userRole]);
 
   const reorderPart = useCallback(async ({ partId, quantity, notes } = {}) => {
     try {
@@ -480,10 +509,11 @@ export const InventoryProvider = ({ children }) => {
         throw new Error(errorMessage);
       }
 
-      const data = await apiCall(`${API_BASE}/inventory/reorder/`, {
-        method: 'POST',
-        body: JSON.stringify({ partId, quantity, notes })
+      // Use centralized axios instance
+      const response = await api.post(`/inventory/reorder/`, { 
+        partId, quantity, notes 
       });
+      const data = response.data;
 
       await refreshParts();
       
@@ -499,7 +529,7 @@ export const InventoryProvider = ({ children }) => {
       }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast, userRole]);
+  }, [refreshParts, showToast, userRole]);
   
   const deletePart = useCallback(async (id) => {
     try {
@@ -514,10 +544,8 @@ export const InventoryProvider = ({ children }) => {
       }
 
       console.log(`Attempting to delete part with ID: ${id}`);
-      // Make sure the URL ends with a trailing slash to avoid Django APPEND_SLASH issues
-      await apiCall(`${API_BASE}/inventory/parts/${id}/`, {
-        method: 'DELETE'
-      });
+      // Use centralized axios instance
+      await api.delete(`${endpoints.inventoryParts}/${id}/`);
       console.log(`Delete API call completed for part ID: ${id}`);
 
       await refreshParts();
@@ -534,32 +562,25 @@ export const InventoryProvider = ({ children }) => {
       }
       throw error;
     }
-  }, [apiCall, refreshParts, showToast, userRole]);
+  }, [refreshParts, showToast, userRole]);
 
   const fetchPartHistory = useCallback(async (partId) => {
     try {
-      // Make sure the URL ends with a trailing slash to avoid Django APPEND_SLASH issues
-      return await apiCall(`${API_BASE}/inventory/parts/${partId}/history/`);
+      // Use centralized axios instance
+      const response = await api.get(`${endpoints.inventoryParts}/${partId}/history/`);
+      return response.data;
     } catch (error) {
       console.error('Failed to fetch part history:', error);
       throw error;
     }
-  }, [apiCall]);
+  }, []);
 
   const exportParts = useCallback(async () => {
     try {
-      const token = getAuthToken();
-      const headers = createAuthHeaders(token);
+      // Use our API helper for exporting parts
+      const response = await apiHelpers.exportInventoryParts();
       
-      const response = await fetch(`${API_BASE}/inventory/export/`, { headers });
-      
-      if (!response.ok) {
-        const data = await safeJsonParse(response);
-        const errorMessage = extractErrorMessage(data, 'Export failed');
-        throw new Error(errorMessage);
-      }
-
-      const blob = await response.blob();
+      const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       

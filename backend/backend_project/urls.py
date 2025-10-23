@@ -12,12 +12,21 @@ urlpatterns = [
     path('api/', include('api.urls')),
     # Backwards-compatible alias: some clients still call /api/auth/... endpoints
     path('api/auth/', include('api.urls')),
+    # Direct auth endpoints for clients expecting /auth/ prefix
+    path('auth/', include('api.urls')),
     path('api/inventory/', include('inventory.urls')),
     path('api/customers/', include('customers.urls')),
     path('api/suppliers/', include('suppliers.urls')),
     path('api/sales/', include('sales.urls')),
     path('api/jobs/', include('jobs.urls')),
     path('api/billing/', include('billing.urls')),
+    # Direct endpoints without /api prefix (for Vite proxy rewrite)
+    path('inventory/', include('inventory.urls')),
+    path('customers/', include('customers.urls')),
+    path('suppliers/', include('suppliers.urls')),
+    path('sales/', include('sales.urls')),
+    path('jobs/', include('jobs.urls')),
+    path('billing/', include('billing.urls')),
 ]
 
 # Serve static files in development

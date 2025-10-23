@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useUser } from '../../components/UserContext';
 import Header from '../../components/ui/Header';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 import KPICard from './components/KPICard';
@@ -8,6 +9,7 @@ import ServiceChart from './components/ServiceChart';
 import { useBilling } from '../billing-expenses/BillingContext';
 
 const DashboardOverview = () => {
+  const { user, loading: userLoading } = useUser();
   const [currentTime, setCurrentTime] = useState(new Date());
   // Backend-provided operational KPIs (jobs, parts, customers, etc.)
   const [baseKpiData, setBaseKpiData] = useState([]);
@@ -24,19 +26,24 @@ const DashboardOverview = () => {
   const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
   useEffect(() => {
+    // Update clock every 30 seconds instead of every second to reduce re-renders
+    // This significantly reduces React's reconciliation overhead
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
+    }, 30000);
 
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    fetchDashboardData();
-    fetchInvoices();
-    fetchExpenses();
-    fetchDebtors();
-  }, []);
+    // Only fetch data if user is authenticated and not loading
+    if (!userLoading && user?.token) {
+      fetchDashboardData();
+      fetchInvoices();
+      fetchExpenses();
+      fetchDebtors();
+    }
+  }, [userLoading, user]);
 
   // Aggregate all KPI sources into one list for display
   const aggregatedKpis = useMemo(() => {
@@ -159,15 +166,21 @@ const DashboardOverview = () => {
     });
   };
 
+  if (userLoading) {
+    return <div className="min-h-screen flex items-center justify-center text-lg">Loading...</div>;
+  }
+  if (!user?.token) {
+    // Optionally, you could redirect or just render nothing
+    return <div className="min-h-screen flex items-center justify-center text-lg">Not authenticated.</div>;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
       <main className="pt-16">
         <div className="px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-7xl mx-auto">
             <Breadcrumb />
-            
             {/* Page Header */}
             <div className="mb-8">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -189,7 +202,6 @@ const DashboardOverview = () => {
                 </div>
               </div>
             </div>
-
             {/* KPI Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
               {aggregatedKpis.map((kpi, index) => (
@@ -204,7 +216,6 @@ const DashboardOverview = () => {
                 />
               ))}
             </div>
-
             {/* Main Content Grid (Graphs Only) */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
               {/* Job Status Board */}
@@ -216,7 +227,6 @@ const DashboardOverview = () => {
                 <ServiceChart />
               </div>
             </div>
-
           </div>
         </div>
       </main>

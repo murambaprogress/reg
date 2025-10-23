@@ -22,38 +22,26 @@ const AdminDashboard = () => {
     totalJobs: 0
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   useEffect(() => {
-    fetchStats();
-    
-    // Set up auto-sync every 30 seconds to get real-time updates from technicians
-    const interval = setInterval(() => {
-      fetchStats();
-    }, 30000);
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    // Stats are fetched by individual components, not here
+    // This prevents duplicate API calls
   }, []);
 
-  const fetchStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
+  const handleStatsUpdate = (newStats) => {
+    // If called without arguments, just trigger a refresh without updating stats
+    if (!newStats) {
+      return;
     }
+    
+    setStats({
+      totalTechnicians: newStats.totalTechnicians || 0,
+      activeTechnicians: newStats.activeTechnicians || 0,
+      pendingJobs: newStats.pendingJobs || 0,
+      completedJobs: newStats.completedJobs || 0,
+      totalJobs: newStats.totalJobs || 0
+    });
   };
 
   const tabs = [
@@ -67,14 +55,14 @@ const AdminDashboard = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <AdminOverview onStatsUpdate={fetchStats} />;
+        return <AdminOverview onStatsUpdate={handleStatsUpdate} />;
       // 'system' tab removed
       case 'technicians':
-        return <TechnicianManagement onStatsUpdate={fetchStats} />;
+        return <TechnicianManagement onStatsUpdate={handleStatsUpdate} />;
       case 'assignments':
-        return <JobAssignment onStatsUpdate={fetchStats} />;
+        return <JobAssignment onStatsUpdate={handleStatsUpdate} />;
       case 'progress':
-        return <TechnicianProgress onStatsUpdate={fetchStats} />;
+        return <TechnicianProgress onStatsUpdate={handleStatsUpdate} />;
       case 'parts':
         return <PartsRequestApproval />;
       default:

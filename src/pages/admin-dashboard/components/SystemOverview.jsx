@@ -1,3 +1,4 @@
+import useSessionErrorHandler from '../../../hooks/useSessionErrorHandler';
 import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
@@ -14,28 +15,20 @@ const SystemOverview = ({ stats, onRefresh }) => {
     customerSatisfaction: 0,
     partsAvailability: 0
   });
+  const handleSessionError = useSessionErrorHandler();
 
   const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
 
   useEffect(() => {
     fetchRecentActivity();
     fetchSystemHealth();
-    
-    // Set up auto-sync every 30 seconds to get real-time updates
-    const interval = setInterval(() => {
-      fetchRecentActivity();
-      fetchSystemHealth();
-    }, 30000);
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    // No auto-refresh - only load on component mount or manual refresh
   }, []);
 
   const fetchRecentActivity = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/recent-activity`, {
+      const response = await fetch(`${API_BASE}/admin/recent-activity/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -46,11 +39,13 @@ const SystemOverview = ({ stats, onRefresh }) => {
         const data = await response.json();
         setRecentActivity(data);
       } else {
-        console.error('Failed to fetch recent activity');
+        const errorObj = { message: response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'UNKNOWN' };
+        if (handleSessionError(errorObj)) return;
         setRecentActivity([]);
       }
     } catch (error) {
       console.error('Error fetching recent activity:', error);
+      if (handleSessionError(error)) return;
       setRecentActivity([]);
     }
   };
@@ -58,7 +53,7 @@ const SystemOverview = ({ stats, onRefresh }) => {
   const fetchSystemHealth = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/system-health`, {
+      const response = await fetch(`${API_BASE}/admin/system-health/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -68,8 +63,12 @@ const SystemOverview = ({ stats, onRefresh }) => {
       if (response.ok) {
         const data = await response.json();
         setSystemHealth(data);
+      } else {
+        const errorObj = { message: response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'UNKNOWN' };
+        if (handleSessionError(errorObj)) return;
       }
     } catch (error) {
+      if (handleSessionError(error)) return;
       console.error('Error fetching system health:', error);
     }
   };

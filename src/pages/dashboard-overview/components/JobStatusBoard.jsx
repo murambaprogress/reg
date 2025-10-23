@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 
 const JobStatusBoard = () => {
   const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([]); // recent technician messages
-  const [msgLoading, setMsgLoading] = useState(true);
+  const [msgLoading, setMsgLoading] = useState(false);
   const [activeJobMessages, setActiveJobMessages] = useState([]);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
@@ -19,46 +19,7 @@ const JobStatusBoard = () => {
 
   const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-  useEffect(() => {
-    fetchJobs();
-    fetchRecentMessages();
-    const interval = setInterval(() => {
-      fetchJobs();
-      fetchRecentMessages(false);
-    }, 5000); // refresh every 5s for near real-time message updates
-    
-    // Real-time listener for technician messages
-    const handler = (e) => {
-      console.log('Received technician message event:', e.detail);
-      // Immediately refresh messages when technician sends one
-      fetchRecentMessages(false);
-      // Optionally refresh jobs if job ID is present
-      if (e.detail?.jobId) {
-        fetchJobs();
-      }
-      // Show a visual toast on admin dashboard
-      try {
-        const m = e.detail?.message || e.detail;
-        const toast = {
-          id: Date.now(),
-          jobId: e.detail?.jobId || m.job || null,
-          title: `Message from ${m.sender_name || m.sender?.username || 'Technician'}`,
-          body: m.message || m.message_text || '',
-        };
-        setToasts(prev => [toast, ...prev]);
-        // Auto-dismiss after 6 seconds
-        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== toast.id)), 6000);
-      } catch (err) {
-        console.warn('Failed to show toast:', err);
-      }
-    };
-    window.addEventListener('technician-message-sent', handler);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('technician-message-sent', handler);
-    };
-  }, []);
+
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -243,8 +204,14 @@ const JobStatusBoard = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-heading-semibold text-text-primary">Messages from Technicians</h2>
           <div className="flex items-center space-x-2">
-            <Icon name="RefreshCw" size={16} className="text-text-secondary" />
-            <span className="text-sm text-text-secondary">Live Updates</span>
+            <button onClick={fetchJobs} className="flex items-center px-2 py-1 text-xs rounded bg-background border border-border hover:bg-background/70 state-transition mr-2">
+              <Icon name="RefreshCw" size={16} className="text-text-secondary mr-1" />
+              Refresh Jobs
+            </button>
+            <button onClick={()=>fetchRecentMessages(true)} className="flex items-center px-2 py-1 text-xs rounded bg-background border border-border hover:bg-background/70 state-transition">
+              <Icon name="RefreshCw" size={16} className="text-text-secondary mr-1" />
+              Refresh Messages
+            </button>
           </div>
         </div>
       </div>

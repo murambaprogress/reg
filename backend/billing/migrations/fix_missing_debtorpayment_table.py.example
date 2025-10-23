@@ -1,0 +1,30 @@
+"""
+Alternative approach to fix the missing DebtorPayment table using Django migrations
+1. Run this to create a custom migration file
+"""
+
+from django.db import migrations, models
+import django.db.models.deletion
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('billing', '0004_add_item_type_and_part_number'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='DebtorPayment',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('amount_paid', models.DecimalField(decimal_places=2, max_digits=12)),
+                ('payment_method', models.CharField(choices=[('cash', 'Cash'), ('bank_transfer', 'Bank Transfer'), ('check', 'Check'), ('mobile_money', 'Mobile Money')], max_length=20)),
+                ('payment_date', models.DateField()),
+                ('reference_number', models.CharField(blank=True, help_text='Payment reference number or receipt number', max_length=100)),
+                ('notes', models.TextField(blank=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('debtor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to='billing.debtor')),
+                ('received_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to='auth.user')),
+            ],
+        ),
+    ]

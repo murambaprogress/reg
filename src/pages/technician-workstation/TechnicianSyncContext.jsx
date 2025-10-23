@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { getBaseUrl } from '../../utils/config'; // Import from the central config file
 
 const TechnicianSyncContext = createContext();
 
@@ -19,10 +20,14 @@ export const TechnicianSyncProvider = ({ children }) => {
   const [error, setError] = useState('');
   const [syncInterval, setSyncInterval] = useState(null);
 
-  // Prefer explicit env var, fallback to '/api' so all requests stay under proxy
-  let API_BASE = import.meta.env.VITE_API_BASE || '/api';
-  // Normalize (remove trailing slash)
-  if (API_BASE.endsWith('/')) API_BASE = API_BASE.slice(0, -1);
+  // Get the base URL from the central config file
+  const API_BASE = getBaseUrl();
+
+  // Check if the current user is a technician
+  const isTechnician = () => {
+    const role = localStorage.getItem('role');
+    return role === 'technician';
+  };
 
   // Helper to safely parse JSON and surface HTML / unexpected responses
   const safeParseJSON = async (response) => {
@@ -37,32 +42,12 @@ export const TechnicianSyncProvider = ({ children }) => {
     throw new Error(`Non-JSON response (status ${response.status}). Preview: ${preview}`);
   };
 
-  // Auto-sync every 10 seconds for faster job assignment detection
+  // Sync only on component mount - no auto-refresh
   useEffect(() => {
-    const interval = setInterval(() => {
+    // Only sync if user is a technician
+    if (isTechnician()) {
       syncData();
-    }, 10000); // Reduced from 30 seconds to 10 seconds
-    
-    setSyncInterval(interval);
-    
-    // Initial sync
-    syncData();
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, []);
-
-  // Additional fast polling for job assignments (every 5 seconds)
-  useEffect(() => {
-    const fastPollInterval = setInterval(() => {
-      // Only fetch jobs for assignment detection
-      fetchJobs();
-    }, 5000);
-    
-    return () => {
-      if (fastPollInterval) clearInterval(fastPollInterval);
-    };
+    }
   }, []);
 
   // Listen for admin replies so technician client can refresh immediately
@@ -74,8 +59,7 @@ export const TechnicianSyncProvider = ({ children }) => {
         if (newMsg) {
           setMessages(prev => [newMsg, ...prev]);
         }
-        // Refresh jobs/messages to reflect any changes
-        fetchJobs();
+        // Only refresh messages, not jobs - reduces redundant API calls
         fetchMessages();
       } catch (err) {
         console.warn('Error handling admin-message-sent event:', err);
@@ -192,8 +176,8 @@ export const TechnicianSyncProvider = ({ children }) => {
           setActiveJob(updatedJob);
         }
         
-        // Trigger immediate sync to notify admin dashboard
-        await syncData();
+        // Don't trigger full sync - let components manually refresh when needed
+        // This prevents cascading API request storms
         
         return updatedJob;
       } else {
@@ -306,12 +290,12 @@ export const TechnicianSyncProvider = ({ children }) => {
         }
       }
 
-  // Successful requests were already merged into the partsRequests via replacement above.
+      // Successful requests were already merged into the partsRequests via replacement above.
   // No need to append newRequests again (would cause duplicates).
 
-      // Trigger sync to notify admin
-      await syncData();
-
+      // Don't trigger full sync - parts requests are already updated optimistically
+      // This prevents 3 additional API calls on every parts request
+      
       return newRequests;
     } catch (error) {
       console.error('Error requesting parts:', error);
@@ -349,8 +333,8 @@ export const TechnicianSyncProvider = ({ children }) => {
         const newMessage = await safeParseJSON(response);
         setMessages(prev => [newMessage, ...prev]);
         
-        // Trigger sync to notify admin
-        await syncData();
+        // Don't trigger full sync - message is already added to local state
+        // This prevents 3 additional API calls on every message send
         
         // Dispatch custom event for real-time dashboard updates
         try {
@@ -455,8 +439,8 @@ export const TechnicianSyncProvider = ({ children }) => {
           setActiveJob(prev => ({ ...prev, progress_percentage: progressPercentage }));
         }
         
-        // Trigger sync to notify admin
-        await syncData();
+        // Don't trigger full sync - progress is already updated locally
+        // This prevents 3 additional API calls on every progress update
         
         return progressUpdate;
       } else {

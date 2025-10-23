@@ -4,6 +4,7 @@ import { useUser } from '../components/UserContext';
 import Button from '../components/ui/Button';
 import { getBaseUrl } from '../utils/config';
 import Icon from '../components/AppIcon';
+import { createDirectAxios } from '../utils/axios';
 
 
 
@@ -43,7 +44,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Use the config helper for PythonAnywhere in production
+  // Always use cloud backend URL
   const API_BASE = getBaseUrl();
 
   const handleLogin = async (e) => {
@@ -58,23 +59,22 @@ const Login = () => {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 
+      // Use direct axios without interceptors to avoid redirects during login
+      const instance = createDirectAxios();
+      
+      console.log('Cookies before login request:', document.cookie);
+
+      const response = await instance.post('/auth/login', {
+        username, 
+        password
+      }, {
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ username, password })
+        }
       });
       
-      const data = await res.json();
-      
-      if (!res.ok) {
-        setError(data.message || `Login failed: ${res.status}`);
-        setLoading(false);
-        return;
-      }
+      const data = response.data;
       
       if (data.otpRequired) {
         // OTP step required (supervisor or admin)
@@ -113,23 +113,20 @@ const Login = () => {
     }
     
     try {
-      const res = await fetch(`${API_BASE}/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 
+      // Use direct axios without interceptors to avoid redirects during OTP verification
+      const instance = createDirectAxios();
+      
+      const response = await instance.post('/auth/verify-otp', {
+        email: otpEmail,
+        otp: otpCode
+      }, {
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ email: otpEmail, otp: otpCode })
+        }
       });
       
-      const data = await res.json();
-      
-      if (!res.ok) {
-        setError(data.message || 'OTP verification failed');
-        setLoading(false);
-        return;
-      }
+      const data = response.data;
       
       // If token returned, login complete
       if (data.token) {

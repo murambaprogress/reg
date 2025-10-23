@@ -11,18 +11,19 @@ urlpatterns = [
     path('me', views.me, name='me'),
     path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
     path('health-check/', views.health_check, name='health_check'),
+    path('get-csrf-token/', views.get_csrf_token, name='get_csrf_token'),
 ]
 
 urlpatterns += [
     path('dev/otps', views.dev_otps, name='dev_otps'),
     # Admin endpoints
-    path('admin/stats', views.admin_stats, name='admin_stats'),
-    path('admin/technicians', views.admin_technicians, name='admin_technicians'),
-    path('admin/technicians/<int:technician_id>', views.delete_technician, name='delete_technician'),
-    path('admin/technicians/<int:technician_id>/toggle-active', views.toggle_technician_active, name='toggle_technician_active'),
-    path('admin/technician-progress', views.admin_technician_progress, name='admin_technician_progress'),
-    path('admin/recent-activity', views.admin_recent_activity, name='admin_recent_activity'),
-    path('admin/system-health', views.admin_system_health, name='admin_system_health'),
+    path('admin/stats/', views.admin_stats, name='admin_stats'),
+    path('admin/technicians/', views.admin_technicians, name='admin_technicians'),
+    path('admin/technicians/<int:technician_id>/', views.delete_technician, name='delete_technician'),
+    path('admin/technicians/<int:technician_id>/toggle-active/', views.toggle_technician_active, name='toggle_technician_active'),
+    path('admin/technician-progress/', views.admin_technician_progress, name='admin_technician_progress'),
+    path('admin/recent-activity/', views.admin_recent_activity, name='admin_recent_activity'),
+    path('admin/system-health/', views.admin_system_health, name='admin_system_health'),
     # Dashboard endpoints
     path('dashboard/kpi', views.dashboard_kpi, name='dashboard_kpi'),
     path('dashboard/monthly-stats', views.dashboard_monthly_stats, name='dashboard_monthly_stats'),

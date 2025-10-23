@@ -8,7 +8,7 @@
 - ✅ Dashboard displays KPI cards with totals from all apps (jobs, inventory, sales, customers, technicians)
 
 ### 2. API URL Configuration
-- ✅ Updated all frontend components to use `https://progress.pythonanywhere.com/api` instead of `http://127.0.0.1:8000/api`
+- ✅ Updated all frontend components to use `https://http://localhost:3001/api` instead of `http://127.0.0.1:8000/api`
 - ✅ Updated 18 files across the application:
   - Dashboard components
   - Admin dashboard components
@@ -34,12 +34,12 @@
 - ✅ Frontend is ready to be served by Django at deployment URL
 
 ### 5. CORS and Security Configuration
-- ✅ CORS configured for `https://progress.pythonanywhere.com`
-- ✅ Allowed hosts includes `progress.pythonanywhere.com`
+- ✅ CORS configured for `https://http://localhost:3001`
+- ✅ Allowed hosts includes `http://localhost:3001`
 - ✅ Static file serving configured for production
 
 ## Deployment URL
-**Primary URL:** https://progress.pythonanywhere.com
+**Primary URL:** https://http://localhost:3001
 
 ## Key Features Ready for Deployment
 1. **Dashboard Overview** - Shows KPI totals from all apps

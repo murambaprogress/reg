@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api, { apiHelpers } from '../../utils/axios';
+import { endpoints } from '../../utils/urls';
+import { getBaseUrl } from '../../utils/config';
 
 const CustomerContext = createContext();
 
-const getAuthToken = () => {
-  try { return localStorage.getItem('token'); } catch (e) { return null; }
-};
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const API_BASE = getBaseUrl();
 
 export const CustomerProvider = ({ children }) => {
   const [customers, setCustomers] = useState([]);
@@ -38,100 +37,106 @@ export const CustomerProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const token = getAuthToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    fetch(`${API_BASE}/customers/`, { headers })
-      .then(r => r.json())
-      .then(data => Array.isArray(data) ? setCustomers(data.map(normalizeCustomer)) : setCustomers([]))
-      .catch(() => setCustomers([]));
+    // Use centralized axios instance for proper auth handling
+    apiHelpers.getCustomers()
+      .then(response => {
+        const data = response.data;
+        Array.isArray(data) ? setCustomers(data.map(normalizeCustomer)) : setCustomers([]);
+      })
+      .catch(error => {
+        console.error("Failed to fetch customers:", error);
+        setCustomers([]);
+      });
   }, []);
 
   const refreshCustomers = () => {
-    const token = getAuthToken();
-    const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-    return fetch(`${API_BASE}/customers/`, { headers })
-      .then(r => r.json())
-      .then(data => {
+    // Use centralized axios instance for proper auth handling
+    return apiHelpers.getCustomers()
+      .then(response => {
+        const data = response.data;
         if (Array.isArray(data)) setCustomers(data.map(normalizeCustomer));
         return Array.isArray(data) ? data.map(normalizeCustomer) : data;
+      })
+      .catch(error => {
+        console.error("Failed to refresh customers:", error);
+        throw error;
       });
   };
 
   const searchCustomers = (q) => {
-    const token = getAuthToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const url = q ? `${API_BASE}/customers/?search=${encodeURIComponent(q)}` : `${API_BASE}/customers/`;
-    return fetch(url, { headers }).then(async (r) => {
-      const data = await r.json().catch(() => null);
-      if (!r.ok) {
-        const msg = data && (data.message || JSON.stringify(data)) ? (data.message || JSON.stringify(data)) : 'Search failed';
-        if (showToast) showToast(msg, 'error');
-        throw new Error(msg);
-      }
-      if (Array.isArray(data)) setCustomers(data);
-      return data;
-    }).catch((err) => { if (showToast) showToast(err.message || 'Search failed', 'error'); return [] });
+    const url = q ? `${endpoints.customers}?search=${encodeURIComponent(q)}` : endpoints.customers;
+    return api.get(url)
+      .then(response => {
+        const data = response.data;
+        if (Array.isArray(data)) {
+          setCustomers(data.map(normalizeCustomer));
+        }
+        return Array.isArray(data) ? data.map(normalizeCustomer) : [];
+      })
+      .catch(error => {
+        console.error("Failed to search customers:", error);
+        if (showToast) showToast(error.message || 'Search failed', 'error');
+        return [];
+      });
   };
 
   const createCustomer = (payload) => {
-    const token = getAuthToken();
-    const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-      // Add support for amountReceived, inventorySold, and fullCost fields
-      const apiPayload = { ...payload };
-      if (payload.amountReceived !== undefined) {
-        apiPayload.amount_received = Number(payload.amountReceived);
-      }
-      if (payload.inventorySold !== undefined) {
-        apiPayload.inventory_sold = Array.isArray(payload.inventorySold) ? JSON.stringify(payload.inventorySold) : String(payload.inventorySold);
-      }
-      if (payload.fullCost !== undefined) {
-        apiPayload.full_cost = Number(payload.fullCost);
-      }
-      return fetch(`${API_BASE}/customers/`, { method: 'POST', headers, body: JSON.stringify(apiPayload) }).then(async (r) => {
-      let text = null; try { text = await r.text(); } catch (e) { text = null; }
-      let data = null; try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
-      if (!r.ok) {
-        const msg = data && (data.message || JSON.stringify(data)) ? (data.message || JSON.stringify(data)) : (typeof data === 'string' ? data : 'Create failed');
-        console.error('createCustomer error response:', data, 'raw:', text);
-        if (showToast) showToast(msg, 'error');
-        throw new Error(msg);
-      }
-      await refreshCustomers();
-      return data;
-    }).catch((err) => { if (showToast) showToast(err.message || 'Create failed', 'error'); throw err; });
+    // Add support for amountReceived, inventorySold, and fullCost fields
+    const apiPayload = { ...payload };
+    if (payload.amountReceived !== undefined) {
+      apiPayload.amount_received = Number(payload.amountReceived);
+    }
+    if (payload.inventorySold !== undefined) {
+      apiPayload.inventory_sold = Array.isArray(payload.inventorySold) ? JSON.stringify(payload.inventorySold) : String(payload.inventorySold);
+    }
+    if (payload.fullCost !== undefined) {
+      apiPayload.full_cost = Number(payload.fullCost);
+    }
+    
+    // Use centralized axios instance for proper auth handling
+    return api.post(endpoints.customers, apiPayload)
+      .then(async (response) => {
+        const data = response.data;
+        await refreshCustomers();
+        return data;
+      })
+      .catch(error => {
+        console.error('createCustomer error:', error);
+        const errorMsg = error.response?.data?.message || error.message || 'Failed to create customer';
+        if (showToast) showToast(errorMsg, 'error');
+        throw new Error(errorMsg);
+      });
   };
 
   const updateCustomer = (id, payload) => {
-    const token = getAuthToken();
-    const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-  return fetch(`${API_BASE}/customers/${id}/`, { method: 'PATCH', headers, body: JSON.stringify(payload) }).then(async (r) => {
-      let text = null; try { text = await r.text(); } catch (e) { text = null; }
-      let data = null; try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
-      if (!r.ok) {
-        const msg = data && (data.message || JSON.stringify(data)) ? (data.message || JSON.stringify(data)) : (typeof data === 'string' ? data : 'Update failed');
-        console.error('updateCustomer error response:', data, 'raw:', text);
-        if (showToast) showToast(msg, 'error');
-        throw new Error(msg);
-      }
-      await refreshCustomers();
-      return data;
-    }).catch((err) => { if (showToast) showToast(err.message || 'Update failed', 'error'); throw err; });
+    // Use centralized axios instance for proper auth handling
+    return api.patch(`${endpoints.customers}/${id}/`, payload)
+      .then(async (response) => {
+        const data = response.data;
+        await refreshCustomers();
+        return data;
+      })
+      .catch(error => {
+        console.error('updateCustomer error:', error);
+        const errorMsg = error.response?.data?.message || error.message || 'Failed to update customer';
+        if (showToast) showToast(errorMsg, 'error');
+        throw new Error(errorMsg);
+      });
   };
 
   const deleteCustomer = (id) => {
-    const token = getAuthToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  return fetch(`${API_BASE}/customers/${id}/`, { method: 'DELETE', headers }).then(async (r) => {
-      if (!r.ok) {
-        const text = await r.text().catch(() => null);
-        const data = text ? (JSON.parse(text) || text) : null;
-        const msg = data && (data.message || JSON.stringify(data)) ? (data.message || JSON.stringify(data)) : (typeof data === 'string' ? data : 'Delete failed');
-        if (showToast) showToast(msg, 'error');
-        throw new Error(msg);
-      }
-      await refreshCustomers();
-      return { success: true };
-    }).catch((err) => { if (showToast) showToast(err.message || 'Delete failed', 'error'); throw err; });
+    // Use centralized axios instance for proper auth handling
+    return api.delete(`${endpoints.customers}/${id}/`)
+      .then(async () => {
+        await refreshCustomers();
+        return { success: true };
+      })
+      .catch(error => {
+        console.error('deleteCustomer error:', error);
+        const errorMsg = error.response?.data?.message || error.message || 'Failed to delete customer';
+        if (showToast) showToast(errorMsg, 'error');
+        throw new Error(errorMsg);
+      });
   };
 
   return (

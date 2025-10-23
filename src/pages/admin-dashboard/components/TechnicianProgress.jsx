@@ -1,3 +1,4 @@
+import useSessionErrorHandler from '../../../hooks/useSessionErrorHandler';
 import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
@@ -10,19 +11,13 @@ const TechnicianProgress = ({ onStatsUpdate }) => {
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+
+  const handleSessionError = useSessionErrorHandler();
 
   useEffect(() => {
     fetchTechnicianProgress();
-    
-    // Set up auto-sync every 15 seconds for real-time updates
-    const interval = setInterval(() => {
-      fetchTechnicianProgress();
-    }, 15000);
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    // No auto-refresh - only load on component mount or manual refresh
   }, []);
 
   const fetchTechnicianProgress = async () => {
@@ -30,24 +25,42 @@ const TechnicianProgress = ({ onStatsUpdate }) => {
     setError('');
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/admin/technician-progress`, {
+      const response = await fetch(`${API_BASE}/auth/admin/technician-progress/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
-      if (response.ok) {
-        const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) {
+          const errorObj = { message: 'AUTHENTICATION_REQUIRED' };
+          if (handleSessionError(errorObj, setError)) return;
+        } else if (response.status === 302) {
+          setError('Authentication redirect detected. Please login again.');
+          const errorObj = { message: 'AUTHENTICATION_REQUIRED' };
+          if (handleSessionError(errorObj, setError)) return;
+        } else {
+          setError(`Failed to fetch technician progress (Status: ${response.status})`);
+        }
+        return;
+      }
+
+      const responseText = await response.text();
+      try {
+        const data = JSON.parse(responseText);
         setTechnicians(data);
         setLastUpdated(new Date());
-        onStatsUpdate && onStatsUpdate();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Failed to fetch technician progress');
+        if (onStatsUpdate && typeof onStatsUpdate === 'function') {
+          onStatsUpdate();
+        }
+      } catch (jsonError) {
+        console.error('JSON parse error:', jsonError, 'Response:', responseText);
+        setError('Invalid JSON response from server');
       }
     } catch (error) {
-      console.error('Error fetching technician progress:', error);
+      console.error('Fetch error:', error);
+      if (handleSessionError(error, setError)) return;
       setError('Network error occurred. Please check your connection.');
     } finally {
       setLoading(false);
