@@ -5,8 +5,8 @@ import tagger from "@dhiwise/component-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Always use cloud backend at progress.pythonanywhere.com
-  const apiTarget = 'https://progress.pythonanywhere.com';
+  // Use local backend server
+  const apiTarget = 'http://localhost:8000';
     
   console.log(`Using API target: ${apiTarget} in ${mode} mode`);
   

@@ -5,7 +5,7 @@
 import { getCSRFToken } from './csrf';
 
 export const getBaseUrl = () => {
-  return import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  return import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
 };
 
 /**

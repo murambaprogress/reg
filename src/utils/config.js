@@ -2,10 +2,10 @@
  * Configuration settings for the application
  */
 
-// API Base URL - Use cloud backend
+// API Base URL - Use local backend
 export const getBaseUrl = () => {
-  // Always use cloud backend at progress.pythonanywhere.com
-  return 'https://progress.pythonanywhere.com/api';
+  // Use local backend server
+  return 'http://localhost:8000/api';
 };
 
 // Authentication settings

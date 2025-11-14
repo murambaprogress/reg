@@ -139,7 +139,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = [
-            'id', 'invoice_number', 'customer', 'customer_name', 
+            'id', 'invoice_number', 'document_type', 'customer', 'customer_name', 
             'customer_email', 'customer_phone', 'job', 'job_description',
             'vehicle_model', 'vehicle_plate', 'service_description',
             'subtotal', 'tax_rate', 'tax_amount', 'discount_amount', 
@@ -163,6 +163,7 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
     - Generates an invoice_number if not supplied
     - Computes subtotal from generated items when subtotal not supplied
     - Handles customer creation from frontend data
+    - Supports document_type to differentiate between invoices and quotations
     """
     items = InvoiceItemSerializer(many=True, required=False, allow_null=True)
     # Read-only helper so frontend gets customer name after POST
@@ -171,21 +172,28 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
     customer_email = serializers.CharField(source='customer.email', read_only=True)
     
     # Frontend customer data fields (write-only)
-    customer_company_name = serializers.CharField(write_only=True, required=False)
-    customer_address = serializers.CharField(write_only=True, required=False)
-    customer_city = serializers.CharField(write_only=True, required=False)
-    customer_phone_input = serializers.CharField(write_only=True, required=False)
-    customer_email_input = serializers.CharField(write_only=True, required=False)
+    customer_company_name = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    customer_address = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    customer_city = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    customer_phone_input = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    customer_email_input = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    
+    # Document type (invoice or quotation)
+    document_type = serializers.CharField(write_only=True, required=False, default='invoice')
     
     class Meta:
         model = Invoice
         fields = [
-            'invoice_number', 'customer', 'customer_name', 'customer_phone', 'customer_email',
+            'invoice_number', 'invoice_date', 'customer', 'customer_name', 'customer_phone', 'customer_email',
             'job', 'vehicle_model', 'vehicle_plate', 'service_description', 'subtotal', 
-            'tax_rate', 'discount_amount', 'due_date', 'notes', 'items',
+            'tax_rate', 'tax_amount', 'discount_amount', 'total_amount', 'due_date', 'notes', 'items',
             'customer_company_name', 'customer_address', 'customer_city', 
-            'customer_phone_input', 'customer_email_input'
+            'customer_phone_input', 'customer_email_input', 'document_type'
         ]
+        extra_kwargs = {
+            'invoice_date': {'required': False},
+            'customer': {'required': False},
+        }
     
     def _generate_invoice_number(self):
         now = timezone.now()
@@ -195,9 +203,20 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         return f"INV-{date_part}-{count_today:04d}"
 
     def create(self, validated_data):
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Creating invoice with data: {validated_data}")
+        
         # Extract nested items if provided
         items_data = validated_data.pop('items', None)
         job = validated_data.get('job')
+        
+        # Extract document_type and save it to the invoice
+        document_type = validated_data.pop('document_type', 'invoice')
+        logger.info(f"Document type: {document_type}")
+        
+        # Store document_type in validated_data so it gets saved to the model
+        validated_data['document_type'] = document_type
         
         # Extract customer data from frontend
         customer_company_name = validated_data.pop('customer_company_name', None)
@@ -205,6 +224,8 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         customer_city = validated_data.pop('customer_city', None)
         customer_phone_input = validated_data.pop('customer_phone_input', None)
         customer_email_input = validated_data.pop('customer_email_input', None)
+        
+        logger.info(f"Customer data - name: {customer_company_name}, phone: {customer_phone_input}, email: {customer_email_input}")
 
         # Handle customer creation/selection
         if not validated_data.get('customer') and customer_company_name:
@@ -215,6 +236,7 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
                 'email': customer_email_input or '',
                 'address': f"{customer_address or ''} {customer_city or ''}".strip()
             }
+            logger.info(f"Creating/finding customer with data: {customer_data}")
             
             # Try to find existing customer by name and phone/email
             customer = None
@@ -252,6 +274,30 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         # Auto-generate invoice number if missing
         if not validated_data.get('invoice_number'):
             validated_data['invoice_number'] = self._generate_invoice_number()
+        
+        # Handle invoice_date - convert from ISO string if needed
+        if 'invoice_date' in validated_data:
+            invoice_date = validated_data['invoice_date']
+            if isinstance(invoice_date, str):
+                # Parse ISO string to date
+                from datetime import datetime
+                try:
+                    dt = datetime.fromisoformat(invoice_date.replace('Z', '+00:00'))
+                    validated_data['invoice_date'] = dt.date()
+                except (ValueError, AttributeError):
+                    # If parsing fails, use today's date
+                    validated_data['invoice_date'] = timezone.now().date()
+        else:
+            # Default to today if not provided
+            validated_data['invoice_date'] = timezone.now().date()
+        
+        # Ensure due_date is set
+        if not validated_data.get('due_date'):
+            # Default to 30 days from invoice date
+            from datetime import timedelta
+            validated_data['due_date'] = validated_data['invoice_date'] + timedelta(days=30)
+        
+        logger.info(f"Invoice data before creation: {validated_data}")
 
         with transaction.atomic():
             invoice = Invoice.objects.create(**validated_data)
@@ -419,7 +465,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = [
-            'id', 'invoice_number', 'customer_name', 'vehicle_model',
+            'id', 'invoice_number', 'document_type', 'customer_name', 'vehicle_model',
             'vehicle_plate', 'service_description', 'total_amount',
             'status', 'payment_method', 'invoice_date', 'due_date', 'paid_date'
         ]

@@ -7,7 +7,7 @@ import { endpoints } from './urls';
 let lastRedirectTime = 0;
 const REDIRECT_COOLDOWN = 3000; // 3 seconds
 
-// Always use the cloud backend URL from getBaseUrl()
+// Use the local backend URL from getBaseUrl()
 const baseURL = getBaseUrl();
 
 // Helper function to get CSRF token from cookies

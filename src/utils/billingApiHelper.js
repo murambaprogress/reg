@@ -81,6 +81,7 @@ export const formatInvoiceData = (formData) => {
     total_amount: parseFloat(formData.totalAmount) || 0,
     payment_method: formData.paymentMethod || 'pending',
     notes: formData.notes || '',
+    document_type: formData.document_type || 'invoice', // Add document_type support
     
     // Format items for API
     items: formData.items.map(item => ({

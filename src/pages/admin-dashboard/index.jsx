@@ -22,7 +22,7 @@ const AdminDashboard = () => {
     totalJobs: 0
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
 
   useEffect(() => {
     // Stats are fetched by individual components, not here

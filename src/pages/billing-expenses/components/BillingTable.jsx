@@ -17,19 +17,28 @@ const BillingTable = ({ searchTerm, dateRange }) => {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [modalMode, setModalMode] = useState('create');
+  const [documentType, setDocumentType] = useState('invoice'); // 'invoice' or 'quotation'
+  const [activeTab, setActiveTab] = useState('invoices'); // 'invoices' or 'quotations'
   const { invoices, loading, error, markInvoicePaid, deleteInvoice, getInvoice, sendInvoiceEmail } = useBilling();
 
   const billingData = invoices || [];
 
   const filteredData = billingData.filter(item => {
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       item.customer_name?.toLowerCase().includes(searchLower) ||
       item.vehicle_model?.toLowerCase().includes(searchLower) ||
       item.vehicle_plate?.toLowerCase().includes(searchLower) ||
       item.service_description?.toLowerCase().includes(searchLower) ||
       item.invoice_number?.toLowerCase().includes(searchLower)
     );
+    
+    // Filter by document type based on active tab
+    const matchesType = activeTab === 'invoices' 
+      ? (!item.document_type || item.document_type === 'invoice')
+      : (item.document_type === 'quotation');
+    
+    return matchesSearch && matchesType;
   });
 
   const getStatusColor = (status) => {
@@ -116,6 +125,14 @@ const BillingTable = ({ searchTerm, dateRange }) => {
   const handleCreateInvoice = () => {
     setSelectedInvoice(null);
     setModalMode('create');
+    setDocumentType('invoice');
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handleCreateQuotation = () => {
+    setSelectedInvoice(null);
+    setModalMode('create');
+    setDocumentType('quotation');
     setIsInvoiceModalOpen(true);
   };
 
@@ -656,15 +673,43 @@ const BillingTable = ({ searchTerm, dateRange }) => {
 
   return (
     <div className="overflow-hidden">
+      {/* Tabs to switch between Invoices and Quotations */}
+      <div className="border-b border-border bg-background">
+        <div className="flex space-x-1 p-2">
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === 'invoices'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background/50'
+            }`}
+          >
+            <Icon name="FileText" size={16} className="inline mr-2" />
+            Invoices ({billingData.filter(item => !item.document_type || item.document_type === 'invoice').length})
+          </button>
+          <button
+            onClick={() => setActiveTab('quotations')}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === 'quotations'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background/50'
+            }`}
+          >
+            <Icon name="FileText" size={16} className="inline mr-2" />
+            Quotations ({billingData.filter(item => item.document_type === 'quotation').length})
+          </button>
+        </div>
+      </div>
+      
       {/* Table Header with Actions */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h3 className="text-lg font-heading-medium text-text-primary">
-              Customer Invoices
+              {activeTab === 'invoices' ? 'Customer Invoices' : 'Customer Quotations'}
             </h3>
             <span className="text-sm text-text-secondary">
-              {filteredData.length} invoices
+              {filteredData.length} {activeTab === 'invoices' ? 'invoices' : 'quotations'}
             </span>
             {selectedInvoices.length > 0 && (
               <div className="flex items-center space-x-2">
@@ -694,14 +739,25 @@ const BillingTable = ({ searchTerm, dateRange }) => {
               <Icon name="Download" size={16} className="mr-2" />
               Export
             </Button>
-            <Button
-              size="sm"
-              onClick={handleCreateInvoice}
-              className="modern-button bg-primary text-primary-foreground"
-            >
-              <Icon name="Plus" size={16} className="mr-2" />
-              New Invoice
-            </Button>
+            {activeTab === 'quotations' ? (
+              <Button
+                size="sm"
+                onClick={handleCreateQuotation}
+                className="modern-button bg-blue-600 text-white"
+              >
+                <Icon name="FileText" size={16} className="mr-2" />
+                New Quotation
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleCreateInvoice}
+                className="modern-button bg-primary text-primary-foreground"
+              >
+                <Icon name="Plus" size={16} className="mr-2" />
+                New Invoice
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -719,7 +775,9 @@ const BillingTable = ({ searchTerm, dateRange }) => {
                   className="modern-input w-4 h-4 text-primary border-border rounded"
                 />
               </th>
-              <th className="p-4 text-left text-sm font-heading-medium text-text-primary">Invoice #</th>
+              <th className="p-4 text-left text-sm font-heading-medium text-text-primary">
+                {activeTab === 'invoices' ? 'Invoice #' : 'Quotation #'}
+              </th>
               <th className="p-4 text-left text-sm font-heading-medium text-text-primary">Customer</th>
               <th className="p-4 text-left text-sm font-heading-medium text-text-primary">Vehicle</th>
               <th className="p-4 text-left text-sm font-heading-medium text-text-primary">Service</th>
@@ -863,6 +921,7 @@ const BillingTable = ({ searchTerm, dateRange }) => {
         }}
         invoice={selectedInvoice}
         mode={modalMode}
+        documentType={documentType}
       />
 
       <DeleteConfirmModal

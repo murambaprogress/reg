@@ -13,6 +13,7 @@ export const InvoiceModal = ({
 }) => {
   const { createInvoice } = useBilling();
   const [loading, setLoading] = useState(false);
+  const [documentType, setDocumentType] = useState('invoice'); // 'invoice' or 'quotation'
   const [formData, setFormData] = useState({
     // Company details
     companyName: "SOLTAM STEEL SOLUTIONS",
@@ -200,6 +201,25 @@ export const InvoiceModal = ({
     }
   };
 
+  const handleCreateQuotation = async () => {
+    if (validateForm()) {
+      setLoading(true);
+      setDocumentType('quotation');
+      try {
+        // Create quotation with the same data structure
+        await createInvoice({ ...formData, documentType: 'quotation' });
+        alert('Quotation created successfully!');
+        close();
+      } catch (error) {
+        console.error('Quotation creation error:', error);
+        alert(`Quotation creation failed: ${error.message || 'Unknown error'}`);
+      } finally {
+        setLoading(false);
+        setDocumentType('invoice');
+      }
+    }
+  };
+
   const printRef = useRef();
   const handlePrint = () => {
     window.print();
@@ -236,17 +256,17 @@ export const InvoiceModal = ({
           </div>
 
           {/* Header Image (Regimark) */}
-          <div className="flex justify-center mb-6 pt-4">
+          <div className="w-full mb-6" style={{ pageBreakInside: 'avoid' }}>
             <img 
               src="/assets/images/regimark_header.png" 
               alt="Regimark Header" 
+              className="w-full"
               style={{ 
-                maxWidth: '100%', 
-                height: '300px', /* Fixed height to match footer */
-                width: '100%', 
-                objectFit: 'fill', /* Changed to fill to stretch the image */
-                marginTop: '15px',
-                transform: 'scale(1.3)' /* Scale up the image by 30% */
+                display: 'block',
+                width: '100%',
+                height: '400px',
+                objectFit: 'fill',
+                border: 'none'
               }} 
             />
           </div>
@@ -264,7 +284,9 @@ export const InvoiceModal = ({
                 <p className="text-sm">Web: {formData.companyWebsite}</p>
               </div>
               <div className="text-right">
-                <h2 className="text-2xl font-bold text-blue-800">TAX INVOICE</h2>
+                <h2 className="text-2xl font-bold text-blue-800">
+                  {documentType === 'quotation' ? 'QUOTATION' : 'TAX INVOICE'}
+                </h2>
                 <div className="mt-4">
                   <Input
                     label="Invoice Number"
@@ -334,7 +356,16 @@ export const InvoiceModal = ({
         </div>
 
         {/* Form Actions - under Customer Billing */}
-        <div className="flex justify-end mt-4 mb-6">
+        <div className="flex justify-end gap-3 mt-4 mb-6">
+          <Button 
+            onClick={handleCreateQuotation} 
+            type="button" 
+            variant="outlined" 
+            disabled={loading}
+            style={{ fontWeight: 'bold', fontSize: '1rem' }}
+          >
+            {loading && documentType === 'quotation' ? 'Saving...' : 'Save Quotation'}
+          </Button>
           <Button 
             onClick={handleCreateInvoice} 
             type="button" 
@@ -342,7 +373,7 @@ export const InvoiceModal = ({
             disabled={loading}
             style={{ fontWeight: 'bold', fontSize: '1rem' }}
           >
-            {loading ? 'Saving...' : 'Save Invoice'}
+            {loading && documentType === 'invoice' ? 'Saving...' : 'Save Invoice'}
           </Button>
         </div>
         
@@ -464,17 +495,17 @@ export const InvoiceModal = ({
           </div>
 
           {/* Footer Image (Regimark) */}
-          <div className="flex justify-center mt-12 pb-12 w-full">
+          <div className="w-full mt-8" style={{ pageBreakInside: 'avoid' }}>
             <img 
               src="/assets/images/regimark_footer.png" 
               alt="Regimark Footer" 
+              className="w-full"
               style={{ 
-                maxWidth: '100%', 
-                height: '300px', /* Fixed height instead of auto to ensure stretching */
-                width: '100%', 
-                objectFit: 'fill', /* Changed to fill to stretch the image */
-                marginBottom: '30px',
-                transform: 'scale(1.3)', /* Scale up the image by 30% */
+                display: 'block',
+                width: '100%',
+                height: '400px',
+                objectFit: 'fill',
+                border: 'none'
               }} 
             />
           </div>

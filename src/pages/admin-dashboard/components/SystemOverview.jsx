@@ -17,7 +17,7 @@ const SystemOverview = ({ stats, onRefresh }) => {
   });
   const handleSessionError = useSessionErrorHandler();
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
 
   useEffect(() => {
     fetchRecentActivity();

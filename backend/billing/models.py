@@ -30,8 +30,14 @@ class Invoice(models.Model):
         ('check', 'Check'),
         ('pending', 'Pending'),
     ]
+    
+    DOCUMENT_TYPE_CHOICES = [
+        ('invoice', 'Invoice'),
+        ('quotation', 'Quotation'),
+    ]
 
     # Invoice identification and basic details
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPE_CHOICES, default='invoice')
     invoice_number = models.CharField(max_length=50, unique=True)
     invoice_date = models.DateField(auto_now_add=True)
     due_date = models.DateField(null=True, blank=True)

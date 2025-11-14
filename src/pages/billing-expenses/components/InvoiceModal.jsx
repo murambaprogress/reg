@@ -6,7 +6,7 @@ import { useBilling } from "../BillingContext";
 import { getAllCustomers, searchCustomers } from "../../../api/customers";
 import { validateInvoice, formatInvoiceData, showNotification } from "../../../utils/billingApiHelper";
 
-const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
+const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create", documentType = "invoice" }) => {
   const { createInvoice, updateInvoice, fetchInvoices, loading: contextLoading } = useBilling();
   
   const [customers, setCustomers] = useState([]);
@@ -116,9 +116,10 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
         setShowNewCustomer(!customer);
       }
     } else if (mode === 'create') {
-      // Generate new invoice number for create mode
+      // Generate new invoice/quotation number for create mode
       const now = new Date();
-      const invoiceNum = `SS${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+      const prefix = documentType === 'quotation' ? 'Q' : 'SS';
+      const invoiceNum = `${prefix}${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
       setFormData(prev => ({
         ...prev,
         invoiceNumber: invoiceNum,
@@ -128,12 +129,13 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
       setSelectedCustomer(null);
       setShowNewCustomer(false);
     }
-  }, [invoice, mode, customers]);
+  }, [invoice, mode, customers, documentType]);
 
   const validateForm = () => {
-    // Validate invoice number
+    // Validate invoice/quotation number
+    const docLabel = documentType === 'quotation' ? 'quotation number' : 'invoice number';
     if (!formData.invoiceNumber.trim()) {
-      alert("Please enter invoice number");
+      alert(`Please enter ${docLabel}`);
       return false;
     }
     
@@ -264,13 +266,14 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
     const subtotalAfterDiscount = subtotal - discountAmount;
     
     // VAT is optional - only calculate if vatIncluded is true
-    const vatAmount = formData.vatIncluded ? (subtotalAfterDiscount * 0.15) : 0; // 15% VAT
-    const totalAmount = subtotalAfterDiscount + vatAmount;
+    // Round to 2 decimal places to avoid validation errors (max 12 digits total)
+    const vatAmount = formData.vatIncluded ? parseFloat((subtotalAfterDiscount * 0.15).toFixed(2)) : 0; // 15% VAT
+    const totalAmount = parseFloat((subtotalAfterDiscount + vatAmount).toFixed(2));
     
     setFormData(prev => ({
       ...prev,
-      subtotal,
-      discountAmount,
+      subtotal: parseFloat(subtotal.toFixed(2)),
+      discountAmount: parseFloat(discountAmount.toFixed(2)),
       vatAmount,
       totalAmount,
     }));
@@ -316,10 +319,11 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
       // Show loading state
       setLoading(true);
       
-      // Add customer data to formData for the formatter
+      // Add customer data and document type to formData for the formatter
       const formDataWithCustomer = {
         ...formData,
-        customer_id: selectedCustomer?.id || null
+        customer_id: selectedCustomer?.id || null,
+        document_type: documentType, // Pass the document type (invoice or quotation)
       };
       
       // Format the invoice data using our helper
@@ -337,22 +341,24 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
       
       let result;
       
+      const docLabel = documentType === 'quotation' ? 'Quotation' : 'Invoice';
+      
       if (mode === 'create') {
-        // Create new invoice
-        console.log('Creating new invoice:', invoiceData);
+        // Create new invoice/quotation
+        console.log(`Creating new ${docLabel.toLowerCase()}:`, invoiceData);
         result = await createInvoice(invoiceData);
-        console.log('Invoice created successfully:', result);
+        console.log(`${docLabel} created successfully:`, result);
         
         // Show success notification
-        showNotification('Invoice created successfully', 'success');
+        showNotification(`${docLabel} created successfully`, 'success');
       } else {
-        // Update existing invoice
-        console.log('Updating invoice:', invoice.id, invoiceData);
+        // Update existing invoice/quotation
+        console.log(`Updating ${docLabel.toLowerCase()}:`, invoice.id, invoiceData);
         result = await updateInvoice(invoice.id, invoiceData);
-        console.log('Invoice updated successfully:', result);
+        console.log(`${docLabel} updated successfully:`, result);
         
         // Show success notification
-        showNotification('Invoice updated successfully', 'success');
+        showNotification(`${docLabel} updated successfully`, 'success');
       }
       
       // Make sure to fetch the updated invoices list
@@ -363,10 +369,11 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
       
       return result;
     } catch (error) {
-      console.error('Error saving invoice:', error);
+      console.error(`Error saving ${documentType}:`, error);
       
       // Format error message
-      let errorMsg = mode === 'create' ? 'Invoice creation failed.' : 'Invoice update failed.';
+      const docLabel = documentType === 'quotation' ? 'Quotation' : 'Invoice';
+      let errorMsg = mode === 'create' ? `${docLabel} creation failed.` : `${docLabel} update failed.`;
       
       // Handle different error formats
       if (error.response?.data) {
@@ -442,15 +449,13 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                 margin-top: 6px;
                 width: 100%;
                 page-break-inside: avoid;
-                text-align: center;
               }
               .invoice-header img {
-                max-height: 55px !important; /* Further reduced height */
-                width: auto !important;
-                max-width: 80% !important;
-                object-fit: contain !important;
                 display: block;
-                margin: 0 auto;
+                width: 100% !important;
+                height: 80px !important;
+                object-fit: fill !important;
+                border: none;
               }
               .invoice-footer {
                 display: block;
@@ -458,14 +463,13 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                 margin-top: 6px;
                 width: 100%;
                 page-break-inside: avoid;
-                text-align: center;
               }
               .invoice-footer img {
-                max-height: 50px !important; /* Further reduced height */
-                max-width: 100% !important;
-                width: auto !important; /* Changed from width: 100% to width: auto */
-                object-fit: contain !important;
-                margin: 0 auto;
+                display: block;
+                width: 100% !important;
+                height: 80px !important;
+                object-fit: fill !important;
+                border: none;
               }
               .modal-footer, .print-btn {
                 display: none !important;
@@ -584,16 +588,19 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[var(--color-surface)] dark:bg-[var(--color-background)] text-[var(--color-text-primary)] dark:text-[var(--color-text-primary)] rounded-lg shadow-xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black" style={{ pointerEvents: 'none' }}>
+      <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg shadow-xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col" style={{ pointerEvents: 'auto' }}>
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-[var(--color-text-primary)] dark:text-[var(--color-text-primary)]">
-            {mode === "create" ? "Create Invoice" : "Edit Invoice"}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            {mode === "create" 
+              ? (documentType === "quotation" ? "Create Quotation" : "Create Invoice")
+              : (documentType === "quotation" ? "Edit Quotation" : "Edit Invoice")
+            }
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-[var(--color-background)] dark:hover:bg-[var(--color-surface)] rounded-full transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
             disabled={loading}
           >
             <Icon name="X" size={20} />
@@ -601,7 +608,7 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
         </div>
 
   {/* Modal Body */}
-  <div className="flex-1 overflow-y-auto">
+  <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
           <div id="invoice-print-area">
             <form onSubmit={handleSubmit} className="p-4 space-y-3">
               {/* Print-only styling */}
@@ -671,12 +678,14 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
               </div>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-700 mb-2 text-sm">Invoice No</h3>
+              <h3 className="font-semibold text-gray-700 mb-2 text-sm">
+                {documentType === "quotation" ? "QNumber" : "Invoice No"}
+              </h3>
               <Input
                 name="invoiceNumber"
                 value={formData.invoiceNumber}
                 onChange={handleInputChange}
-                placeholder="SS047"
+                placeholder={documentType === "quotation" ? "Q241112-001" : "SS047"}
                 required
               />
             </div>
@@ -921,24 +930,8 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
 
           {/* Totals Section */}
           <div className="flex justify-end">
-            {/* Save/Create Invoice Button - Far Right */}
+            {/* Totals Display Only - No Save Button Here */}
             <div className="flex flex-col w-64 space-y-1">
-              <div className="flex justify-end mb-2">
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold"
-                >
-                  {loading ? (
-                    <div className="flex items-center gap-1">
-                      <Icon name="Loader" size={14} className="animate-spin" />
-                      {mode === "create" ? "Creating..." : "Updating..."}
-                    </div>
-                  ) : (
-                    mode === "create" ? "Save Invoice" : "Update Invoice"
-                  )}
-                </Button>
-              </div>
               <div className="flex justify-between py-1 border-b border-gray-200">
                 <span className="font-medium text-sm">Sub-total</span>
                 <span className="font-medium text-sm">${formData.subtotal.toFixed(2)}</span>
@@ -984,34 +977,37 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
 
               {/* Footer */}
               <div className="pt-1 border-t border-gray-200 invoice-footer">
-                <img src="/assets/images/invoice-footer.jpeg" alt="Regimark Motors Services" className="h-auto mx-auto" style={{maxHeight: '40px', maxWidth: '100%'}} />
+                <img src="/assets/images/invoice-footer.jpeg" alt="Regimark Motors Services" className="w-full" style={{display: 'block', width: '100%', height: '400px', objectFit: 'fill', border: 'none'}} />
               </div>
             </form>
           </div>
         </div>
 
   {/* Modal Footer */}
-  <div className="flex flex-col gap-3 p-6 border-t border-gray-200 bg-gray-50 modal-footer" style={{ flexShrink: 0 }}>
+  <div className="flex flex-col gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 modal-footer" style={{ flexShrink: 0 }}>
           {loading && (
-            <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-md mb-2 flex items-center">
+            <div className="bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 px-4 py-2 rounded-md mb-2 flex items-center">
               <svg className="animate-spin h-5 w-5 mr-3 text-blue-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Saving invoice... Please wait
+              Saving {documentType === "quotation" ? "quotation" : "invoice"}... Please wait
             </div>
           )}
           <div className="flex items-center gap-4 mb-2 justify-between">
             <div className="flex items-center gap-4">
-              <span className="font-medium">Share Invoice:</span>
+              <span className="font-medium">
+                {documentType === "quotation" ? "Share Quotation:" : "Share Invoice:"}
+              </span>
               <Button
                 type="button"
                 variant="ghost"
                 className="flex items-center gap-2 text-green-600 hover:text-green-700"
                 onClick={() => {
                   // WhatsApp share logic (replace with real link)
+                  const docLabel = documentType === "quotation" ? "Quotation" : "Invoice";
                   const url = window.location.href;
-                  window.open(`https://wa.me/?text=Invoice%20from%20Regimark%20Motors:%20${url}`);
+                  window.open(`https://wa.me/?text=${docLabel}%20from%20Regimark%20Motors:%20${url}`);
                 }}
               >
                 <Icon name="MessageSquare" size={20} className="text-green-600" />
@@ -1023,8 +1019,9 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                 className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
                 onClick={() => {
                   // Email share logic (replace with real link)
-                  const subject = encodeURIComponent('Invoice from Regimark Motors');
-                  const body = encodeURIComponent('Please find your invoice attached.');
+                  const docLabel = documentType === "quotation" ? "Quotation" : "Invoice";
+                  const subject = encodeURIComponent(`${docLabel} from Regimark Motors`);
+                  const body = encodeURIComponent(`Please find your ${docLabel.toLowerCase()} attached.`);
                   window.open(`mailto:?subject=${subject}&body=${body}`);
                 }}
               >
@@ -1034,7 +1031,8 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
             </div>
             <div className="flex items-center gap-3">
               <Button 
-                type="submit"
+                type="button"
+                onClick={handleSubmit}
                 disabled={loading}
                 className="bg-primary text-primary-foreground px-6 py-2 font-semibold"
               >
@@ -1044,7 +1042,9 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                     {mode === "create" ? "Creating..." : "Updating..."}
                   </div>
                 ) : (
-                  mode === "create" ? "Save Invoice" : "Update Invoice"
+                  mode === "create" 
+                    ? (documentType === "quotation" ? "Save Quotation" : "Save Invoice")
+                    : (documentType === "quotation" ? "Update Quotation" : "Update Invoice")
                 )}
               </Button>
               <Button 
@@ -1060,7 +1060,7 @@ const InvoiceModal = ({ isOpen, onClose, invoice = null, mode = "create" }) => {
                 onClick={handlePrint}
                 disabled={loading}
               >
-                Print Invoice
+                {documentType === "quotation" ? "Print Quotation" : "Print Invoice"}
               </Button>
             </div>
           </div>

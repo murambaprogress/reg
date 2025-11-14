@@ -11,7 +11,7 @@ const TechnicianProgress = ({ onStatsUpdate }) => {
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://progress.pythonanywhere.com/api';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
 
   const handleSessionError = useSessionErrorHandler();
 
